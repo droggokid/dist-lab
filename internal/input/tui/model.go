@@ -22,10 +22,13 @@ const (
 type Model struct {
 	state viewState
 
-	picker  filepicker.Model
-	fields  fieldsModel
-	preview viewport.Model
-	export  exportPromptModel
+	picker    filepicker.Model
+	fields    fieldsModel
+	preview   viewport.Model
+	valueList valueListModel
+	export    exportPromptModel
+
+	previewMode previewMode
 
 	filePaths      []string
 	fileSizes      []int64

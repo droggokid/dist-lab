@@ -6,10 +6,16 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 const valuesHeading = "Values"
+
+type previewMode int
+
+const (
+	previewModeText previewMode = iota
+	previewModeValues
+)
 
 func (m *Model) updatePreview(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.export.active {
@@ -22,9 +28,36 @@ func (m *Model) updatePreview(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			m.toggleEmptyValueFilter()
 			return m, nil
+		case "g":
+			if m.previewMode == previewModeText {
+				m.preview.GotoTop()
+				return m, nil
+			}
+		case "G":
+			if m.previewMode == previewModeText {
+				m.preview.GotoBottom()
+				return m, nil
+			}
+		case "v":
+			m.togglePreviewMode()
+			return m, nil
+		case "d":
+			if m.previewMode == previewModeValues {
+				m.deleteSelectedValue()
+				return m, nil
+			}
+		case "r":
+			if m.previewMode == previewModeValues {
+				m.restoreValues()
+				return m, nil
+			}
 		case "x":
 			return m, m.openExportPrompt()
 		}
+	}
+
+	if m.previewMode == previewModeValues {
+		return m.updateValueList(msg)
 	}
 
 	var cmd tea.Cmd
@@ -41,6 +74,10 @@ func (m *Model) previewView() string {
 }
 
 func (m *Model) previewContent() string {
+	if m.previewMode == previewModeValues {
+		return m.valueListContent()
+	}
+
 	return fmt.Sprintf("%s%s", valuesHeader(), m.preview.View())
 }
 
@@ -54,15 +91,27 @@ func (m *Model) previewFooterText() string {
 		filterAction = "e show raw"
 	}
 
-	return helpFooter("up/down scroll", "pgup/pgdn page", filterAction, "x export", "f change field", "a add file", "o new file")
+	if m.previewMode == previewModeValues {
+		return helpFooter("up/down move", "d delete", "r restore", "v text", filterAction, "x export", "f change field", "a add file", "o new file")
+	}
+
+	return helpFooter("up/down scroll", "pgup/pgdn page", "g/G top/bottom", "v edit values", filterAction, "x export", "f change field", "a add file", "o new file")
 }
 
 func (m *Model) resizePreview() {
 	m.preview.Width = m.contentWidth()
-	m.preview.Height = m.childContentHeight(
+	m.preview.Height = m.previewContentHeight() - valuesHeaderHeight()
+	if m.preview.Height < minContentHeight {
+		m.preview.Height = minContentHeight
+	}
+	m.resizeValueList()
+}
+
+func (m *Model) previewContentHeight() int {
+	return m.childContentHeight(
 		m.previewHeaderText(),
 		m.previewFooterText(),
-		lipgloss.Height(valuesHeader()),
+		0,
 	)
 }
 
@@ -70,16 +119,24 @@ func valuesHeader() string {
 	return valuesHeading + "\n"
 }
 
+func valuesHeaderHeight() int {
+	return strings.Count(valuesHeader(), "\n")
+}
+
 func (m *Model) setValues(values []any) {
 	m.rawValues = cloneValues(values)
 	m.values = cloneValues(values)
 	m.valuesFiltered = false
+	m.previewMode = previewModeText
+	m.rebuildValueList(0)
 }
 
 func (m *Model) clearValues() {
 	m.rawValues = nil
 	m.values = nil
 	m.valuesFiltered = false
+	m.previewMode = previewModeText
+	m.valueList = valueListModel{}
 	m.preview.SetContent("")
 	m.preview.GotoTop()
 }
@@ -97,6 +154,7 @@ func (m *Model) toggleEmptyValueFilter() {
 		m.values = cloneValues(m.rawValues)
 	}
 
+	m.rebuildValueList(0)
 	m.resizeViews()
 	m.renderValues()
 }
@@ -111,7 +169,65 @@ func (m *Model) valuesStatus() string {
 		return fmt.Sprintf("%d shown / %d raw (nil/empty filtered)", len(m.values), len(m.rawValues))
 	}
 
+	if len(m.values) != len(m.rawValues) {
+		return fmt.Sprintf("%d current / %d raw (edited)", len(m.values), len(m.rawValues))
+	}
+
 	return fmt.Sprintf("%d raw", len(m.rawValues))
+}
+
+func (m *Model) togglePreviewMode() {
+	if m.previewMode == previewModeText {
+		m.previewMode = previewModeValues
+		m.rebuildValueList(m.selectedValueIndex())
+	} else {
+		m.previewMode = previewModeText
+		m.renderValues()
+	}
+
+	m.notice = ""
+	m.resizeViews()
+}
+
+func (m *Model) updateValueList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.valueList, cmd = m.valueList.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) selectedValueIndex() int {
+	index, ok := m.valueList.SelectedIndex()
+	if !ok {
+		return 0
+	}
+
+	return index
+}
+
+func (m *Model) deleteSelectedValue() {
+	index, ok := m.valueList.SelectedIndex()
+	if !ok || index < 0 || index >= len(m.values) {
+		return
+	}
+
+	m.values = append(m.values[:index], m.values[index+1:]...)
+	m.notice = ""
+	m.rebuildValueList(index)
+	m.renderValues()
+	m.resizeViews()
+}
+
+func (m *Model) restoreValues() {
+	if m.valuesFiltered {
+		m.values = filterEmptyValues(m.rawValues)
+	} else {
+		m.values = cloneValues(m.rawValues)
+	}
+
+	m.notice = ""
+	m.rebuildValueList(0)
+	m.renderValues()
+	m.resizeViews()
 }
 
 func cloneValues(values []any) []any {

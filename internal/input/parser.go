@@ -87,13 +87,15 @@ func (p *JSONParser) AddFile(filePath string) error {
 func (p *JSONParser) HandleSelection(selectedPath string, docs []any) ([]any, error) {
 	query := genericPathToJQ(selectedPath)
 
-	if !strings.HasPrefix(strings.TrimPrefix(strings.TrimSpace(selectedPath), "$"), "[]") {
-		query = ".[]? | " + query
-	}
+	var values []any
 
-	values, err := runJQ(query, docs)
-	if err != nil {
-		return nil, err
+	for _, doc := range docs {
+		docValues, err := runJQ(query, doc)
+		if err != nil {
+			return nil, err
+		}
+
+		values = append(values, docValues...)
 	}
 
 	return values, nil
