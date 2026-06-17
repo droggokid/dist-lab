@@ -127,18 +127,24 @@ func (m *Model) saveExportPrompt() {
 
 func (m *Model) exportPopup() string {
 	lines := []string{
-		"Export values",
-		fmt.Sprintf("Format: %s", m.exportFormatLabel()),
-		fmt.Sprintf("Values: %d", len(m.values)),
+		titleStyle.Render("Export values"),
+		statusLine(
+			statusItem{label: "Format", value: m.exportFormatLabel()},
+			statusItem{label: "Values", value: fmt.Sprint(len(m.values))},
+		),
 		"",
-		"Path",
+		labelStyle.Render("Path"),
 		m.export.input.View(),
 		"",
-		"enter save  tab format  esc cancel",
+		helpFooter(
+			keyHelp{key: "enter", label: "save"},
+			keyHelp{key: "tab", label: "format"},
+			keyHelp{key: "esc", label: "cancel"},
+		),
 	}
 
 	if m.export.err != "" {
-		lines = append(lines, "", "Error", m.export.err)
+		lines = append(lines, "", errorTitleStyle.Render("Error"), m.export.err)
 	}
 
 	return m.popupView(strings.Join(lines, "\n"))

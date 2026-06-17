@@ -17,6 +17,47 @@ const (
 	screenSectionCount   = 3
 )
 
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("39"))
+	labelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245"))
+	valueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+	keyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("229")).
+			Background(lipgloss.Color("62")).
+			Padding(0, 1)
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("248"))
+	badgeStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("230")).
+			Background(lipgloss.Color("29")).
+			Padding(0, 1)
+	headerBorderColor = lipgloss.Color("62")
+	footerBorderColor = lipgloss.Color("240")
+	popupBorderColor  = lipgloss.Color("62")
+	errorTitleStyle   = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("203"))
+	successTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("42"))
+)
+
+type statusItem struct {
+	label string
+	value string
+}
+
+type keyHelp struct {
+	key   string
+	label string
+}
+
 func (m *Model) screenView(header string, content string, footer string) string {
 	return m.renderScreen(
 		m.screenSections(
@@ -65,26 +106,26 @@ func (m *Model) activePopup() string {
 
 func (m *Model) errorPopup() string {
 	return m.popupView(
-		fmt.Sprintf("Error\n%v", m.err),
+		fmt.Sprintf("%s\n%v", errorTitleStyle.Render("Error"), m.err),
 	)
 }
 
 func (m *Model) noticePopup() string {
 	return m.popupView(
-		fmt.Sprintf("Saved\n%s", m.notice),
+		fmt.Sprintf("%s\n%s", successTitleStyle.Render("Saved"), m.notice),
 	)
 }
 
 func (m *Model) popupView(content string) string {
-	return m.borderedBlockWithStyle(content, lipgloss.RoundedBorder())
+	return m.borderedBlockWithStyle(content, lipgloss.RoundedBorder(), popupBorderColor)
 }
 
 func (m *Model) headerView(content string) string {
-	return m.borderedBlock(content)
+	return m.borderedBlockWithStyle(content, lipgloss.NormalBorder(), headerBorderColor)
 }
 
 func (m *Model) footerView(content string) string {
-	return m.borderedBlock(content)
+	return m.borderedBlockWithStyle(content, lipgloss.NormalBorder(), footerBorderColor)
 }
 
 func (m *Model) contentView(content string, header string, footer string) string {
@@ -94,13 +135,10 @@ func (m *Model) contentView(content string, header string, footer string) string
 		Render(content)
 }
 
-func (m *Model) borderedBlock(content string) string {
-	return m.borderedBlockWithStyle(content, lipgloss.NormalBorder())
-}
-
-func (m *Model) borderedBlockWithStyle(content string, border lipgloss.Border) string {
+func (m *Model) borderedBlockWithStyle(content string, border lipgloss.Border, borderColor lipgloss.Color) string {
 	return lipgloss.NewStyle().
 		Border(border).
+		BorderForeground(borderColor).
 		Padding(0, 1).
 		Width(m.borderedBlockWidth()).
 		Render(content)
@@ -157,6 +195,51 @@ func (m *Model) contentWidth() int {
 	}
 
 	return m.width
+}
+
+func viewHeader(title string, lines ...string) string {
+	return viewHeaderTitle(titleStyle.Render(title), lines...)
+}
+
+func viewHeaderTitle(title string, lines ...string) string {
+	parts := []string{title}
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts = append(parts, line)
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func statusLine(items ...statusItem) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.value == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", labelStyle.Render(item.label+":"), valueStyle.Render(item.value)))
+	}
+
+	return strings.Join(parts, "  ")
+}
+
+func badge(value string) string {
+	return badgeStyle.Render(value)
+}
+
+func helpFooter(items ...keyHelp) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, keyHelpView(item))
+	}
+
+	return strings.Join(parts, "  ")
+}
+
+func keyHelpView(item keyHelp) string {
+	return fmt.Sprintf("%s %s", keyStyle.Render(item.key), helpStyle.Render(item.label))
 }
 
 func screenChromeSpacing(sectionCount int) int {

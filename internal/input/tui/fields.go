@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	"dist-lab/internal/input"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -88,12 +86,17 @@ func (m *Model) fieldsView() string {
 }
 
 func (m *Model) fieldsHeader() string {
-	return fmt.Sprintf("Field Selection\n%s", m.fileInfoStatus())
+	return viewHeader("Field Selection", m.fileInfoStatus())
 }
 
 func (m *Model) fieldsFooter() string {
 	// The list has its own help, we can render it here
-	baseActions := []string{"enter select", "a add file", "o new file"}
+	baseActions := []keyHelp{
+		{key: "enter", label: "select"},
+		{key: "a", label: "add file"},
+		{key: "o", label: "new file"},
+		{key: "q", label: "quit"},
+	}
 	if m.fields.list == nil {
 		return helpFooter(baseActions...)
 	}
@@ -112,4 +115,3 @@ func (m *Model) resizeFields() {
 		0,
 	))
 }
-

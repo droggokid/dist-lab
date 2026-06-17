@@ -7,11 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func helpFooter(actions ...string) string {
-	actions = append(actions, "q quit")
-	return strings.Join(actions, "  ")
-}
-
 func (m *Model) fileInfoStatus() string {
 	var fileDesc string
 	if len(m.filePaths) == 0 {
@@ -22,7 +17,14 @@ func (m *Model) fileInfoStatus() string {
 		fileDesc = fmt.Sprintf("%d files (latest: %s)", len(m.filePaths), m.filePaths[len(m.filePaths)-1])
 	}
 
-	return fmt.Sprintf("File: %s\nSize: %s\nDocs: %d  Fields: %d", fileDesc, m.fileSizeStatus(), m.docCount, m.fieldCount)
+	return strings.Join([]string{
+		statusLine(statusItem{label: "File", value: fileDesc}),
+		statusLine(
+			statusItem{label: "Size", value: m.fileSizeStatus()},
+			statusItem{label: "Docs", value: fmt.Sprint(m.docCount)},
+			statusItem{label: "Fields", value: fmt.Sprint(m.fieldCount)},
+		),
+	}, "\n")
 }
 
 func (m *Model) fileSizeStatus() string {
@@ -78,11 +80,18 @@ func (m *Model) filePickerView() string {
 }
 
 func (m *Model) filePickerHeader() string {
-	return "File Picker\nChoose a JSON file"
+	return viewHeader(
+		"File Picker",
+		statusLine(statusItem{label: "Action", value: "Choose a JSON file"}),
+	)
 }
 
 func (m *Model) filePickerFooter() string {
-	return helpFooter("enter select/open", "esc back")
+	return helpFooter(
+		keyHelp{key: "enter", label: "select/open"},
+		keyHelp{key: "esc", label: "back"},
+		keyHelp{key: "q", label: "quit"},
+	)
 }
 
 func (m *Model) resizeFilePicker() {

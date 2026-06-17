@@ -82,20 +82,55 @@ func (m *Model) previewContent() string {
 }
 
 func (m *Model) previewHeaderText() string {
-	return fmt.Sprintf("Preview\n%s\nPath: %s\nValues: %s", m.fileInfoStatus(), m.selectedPath, m.valuesStatus())
+	return viewHeaderTitle(
+		titleStyle.Render("Preview")+" "+m.previewModeBadge(),
+		m.fileInfoStatus(),
+		statusLine(statusItem{label: "Path", value: m.selectedPath}),
+		statusLine(statusItem{label: "Values", value: m.valuesStatus()}),
+	)
 }
 
 func (m *Model) previewFooterText() string {
-	filterAction := "e filter nil/empty"
+	filterAction := keyHelp{key: "e", label: "filter nil/empty"}
 	if m.valuesFiltered {
-		filterAction = "e show raw"
+		filterAction = keyHelp{key: "e", label: "show raw"}
 	}
 
 	if m.previewMode == previewModeValues {
-		return helpFooter("up/down move", "d delete", "r restore", "v text", filterAction, "x export", "f change field", "a add file", "o new file")
+		return helpFooter(
+			keyHelp{key: "up/down", label: "move"},
+			keyHelp{key: "d", label: "delete"},
+			keyHelp{key: "r", label: "restore"},
+			keyHelp{key: "v", label: "text"},
+			filterAction,
+			keyHelp{key: "x", label: "export"},
+			keyHelp{key: "f", label: "change field"},
+			keyHelp{key: "a", label: "add file"},
+			keyHelp{key: "o", label: "new file"},
+			keyHelp{key: "q", label: "quit"},
+		)
 	}
 
-	return helpFooter("up/down scroll", "pgup/pgdn page", "g/G top/bottom", "v edit values", filterAction, "x export", "f change field", "a add file", "o new file")
+	return helpFooter(
+		keyHelp{key: "up/down", label: "scroll"},
+		keyHelp{key: "pgup/pgdn", label: "page"},
+		keyHelp{key: "g/G", label: "top/bottom"},
+		keyHelp{key: "v", label: "edit values"},
+		filterAction,
+		keyHelp{key: "x", label: "export"},
+		keyHelp{key: "f", label: "change field"},
+		keyHelp{key: "a", label: "add file"},
+		keyHelp{key: "o", label: "new file"},
+		keyHelp{key: "q", label: "quit"},
+	)
+}
+
+func (m *Model) previewModeBadge() string {
+	if m.previewMode == previewModeValues {
+		return badge("VALUES")
+	}
+
+	return badge("TEXT")
 }
 
 func (m *Model) resizePreview() {
