@@ -93,10 +93,11 @@ func (m *Model) fieldsHeader() string {
 
 func (m *Model) fieldsFooter() string {
 	// The list has its own help, we can render it here
+	baseActions := []string{"enter select", "a add file", "o new file"}
 	if m.fields.list == nil {
-		return helpFooter("enter select", "o change file")
+		return helpFooter(baseActions...)
 	}
-	return m.fields.list.Help.View(*m.fields.list) + "\n" + helpFooter("enter select", "o change file")
+	return m.fields.list.Help.View(*m.fields.list) + "\n" + helpFooter(baseActions...)
 }
 
 func (m *Model) resizeFields() {

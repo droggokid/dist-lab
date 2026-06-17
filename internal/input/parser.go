@@ -12,31 +12,30 @@ import (
 )
 
 type JSONParser struct {
-	filePath string
-	Fields   []Field
-	Docs     []any
+	Fields     []Field
+	Docs       []any
+	seenFields map[string]struct{}
 }
 
 type Field struct {
 	Path string
 }
 
-func NewParser(filePath string) *JSONParser {
+func NewParser() *JSONParser {
 	return &JSONParser{
-		filePath: filePath,
+		seenFields: make(map[string]struct{}),
 	}
 }
 
-func (p *JSONParser) HandleDocument() error {
-	file, err := os.Open(p.filePath)
+func (p *JSONParser) AddFile(filePath string) error {
+	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("open file %q: %w", p.filePath, err)
+		return fmt.Errorf("open file %q: %w", filePath, err)
 	}
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
-
-	seen := make(map[string]struct{})
+	var docCount int
 
 	for {
 		var doc any
@@ -44,11 +43,19 @@ func (p *JSONParser) HandleDocument() error {
 		err := decoder.Decode(&doc)
 		if err != nil {
 			if err == io.EOF {
+				if docCount == 0 {
+					return fmt.Errorf("file %q is empty", filePath)
+				}
 				break
 			}
-			return fmt.Errorf("parse json %q: %w", p.filePath, err)
+
+			if docCount == 0 {
+				return fmt.Errorf("unsupported file format or invalid JSON in %q: %v", filePath, err)
+			}
+			return fmt.Errorf("parse error in %q at document %d: %w", filePath, docCount+1, err)
 		}
 
+		docCount++
 		p.Docs = append(p.Docs, doc)
 
 		paths, err := runJQ("paths", doc)
@@ -59,11 +66,11 @@ func (p *JSONParser) HandleDocument() error {
 		for _, path := range paths {
 			pathString := jqPathToGenericString(path)
 
-			if _, exists := seen[pathString]; exists {
+			if _, exists := p.seenFields[pathString]; exists {
 				continue
 			}
 
-			seen[pathString] = struct{}{}
+			p.seenFields[pathString] = struct{}{}
 			p.Fields = append(p.Fields, Field{
 				Path: pathString,
 			})

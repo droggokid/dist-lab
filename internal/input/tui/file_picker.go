@@ -13,7 +13,16 @@ func helpFooter(actions ...string) string {
 }
 
 func (m *Model) fileInfoStatus() string {
-	return fmt.Sprintf("File: %s\nDocs: %d  Fields: %d", m.filePath, m.docCount, m.fieldCount)
+	var fileDesc string
+	if len(m.filePaths) == 0 {
+		fileDesc = "none"
+	} else if len(m.filePaths) == 1 {
+		fileDesc = m.filePaths[0]
+	} else {
+		fileDesc = fmt.Sprintf("%d files (latest: %s)", len(m.filePaths), m.filePaths[len(m.filePaths)-1])
+	}
+
+	return fmt.Sprintf("File: %s\nDocs: %d  Fields: %d", fileDesc, m.docCount, m.fieldCount)
 }
 
 func (m *Model) filePickerView() string {

@@ -26,13 +26,17 @@ type Model struct {
 	fields  fieldsModel
 	preview viewport.Model
 
-	filePath     string
-	selectedPath string
-	width        int
-	height       int
+	filePaths      []string
+	selectedPath   string
+	rawValues      []any
+	values         []any
+	valuesFiltered bool
+	width          int
+	height         int
 
 	parser *input.JSONParser
 	err    error
+	notice string
 
 	fieldCount int
 	docCount   int
@@ -66,11 +70,19 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) changeState(state viewState) {
 	m.state = state
 	m.err = nil
+	m.notice = ""
 	m.resizeViews()
 }
 
 func (m *Model) setError(err error) {
 	m.err = err
+	m.notice = ""
+	m.resizeViews()
+}
+
+func (m *Model) setNotice(notice string) {
+	m.notice = notice
+	m.err = nil
 	m.resizeViews()
 }
 
@@ -87,6 +99,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "o":
+			m.parser = nil
+			m.filePaths = nil
+			m.clearValues()
+			m.changeState(viewFilePicker)
+			return m, m.picker.Init()
+
+		case "a":
 			m.changeState(viewFilePicker)
 			return m, m.picker.Init()
 
@@ -120,33 +139,30 @@ func (m *Model) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.picker, cmd = m.picker.Update(msg)
 
 	if didSelect, path := m.picker.DidSelectFile(msg); didSelect {
-		m.filePath = path
-		m.parser = nil
-		m.selectedPath = ""
-		m.fieldCount = 0
-		m.docCount = 0
-		m.err = nil
-		m.preview.SetContent("")
+		if m.parser == nil {
+			m.parser = input.NewParser()
+			m.filePaths = []string{}
+			m.selectedPath = ""
+			m.clearValues()
+		}
 
-		parser := input.NewParser(path)
+		m.filePaths = append(m.filePaths, path)
 
-		if err := parser.HandleDocument(); err != nil {
+		if err := m.parser.AddFile(path); err != nil {
 			m.setError(err)
 			return m, cmd
 		}
 
-		if len(parser.Fields) == 0 {
-			m.parser = nil
-			m.fieldCount = 0
-			m.docCount = len(parser.Docs)
-			m.setError(fmt.Errorf("no fields found in %s", path))
+		if len(m.parser.Fields) == 0 {
+			m.fieldCount = len(m.parser.Fields)
+			m.docCount = len(m.parser.Docs)
+			m.setError(fmt.Errorf("no fields found in combined files"))
 			return m, cmd
 		}
 
-		m.parser = parser
-		m.fieldCount = len(parser.Fields)
-		m.docCount = len(parser.Docs)
-		m.fields = newFieldsModel(parser.Fields)
+		m.fieldCount = len(m.parser.Fields)
+		m.docCount = len(m.parser.Docs)
+		m.fields = newFieldsModel(m.parser.Fields)
 		m.changeState(viewFields)
 
 		return m, tea.Batch(cmd, m.fields.Init())
@@ -169,9 +185,9 @@ func (m *Model) updateFields(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		m.preview.SetContent(formatValues(values))
-		m.preview.GotoTop()
+		m.setValues(values)
 		m.changeState(viewPreview)
+		m.renderValues()
 	}
 
 	return m, cmd
