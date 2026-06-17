@@ -25,6 +25,7 @@ type Model struct {
 	picker  filepicker.Model
 	fields  fieldsModel
 	preview viewport.Model
+	export  exportPromptModel
 
 	filePaths      []string
 	selectedPath   string
@@ -71,6 +72,7 @@ func (m *Model) changeState(state viewState) {
 	m.state = state
 	m.err = nil
 	m.notice = ""
+	m.closeExportPrompt()
 	m.resizeViews()
 }
 
@@ -94,8 +96,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeViews()
 
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+
+		if m.export.active {
+			return m.updatePreview(msg)
+		}
+
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "q":
 			return m, tea.Quit
 
 		case "o":
@@ -213,4 +223,5 @@ func (m *Model) resizeViews() {
 	m.resizeFilePicker()
 	m.resizeFields()
 	m.resizePreview()
+	m.resizeExportPrompt()
 }

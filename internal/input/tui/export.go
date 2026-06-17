@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type exportFormat string
@@ -15,39 +18,208 @@ type exportFormat string
 const (
 	exportFormatJSON exportFormat = "json"
 	exportFormatCSV  exportFormat = "csv"
-	exportDirName                 = "exports"
 )
 
-func EnsureExportDir() (string, error) {
-	dir, err := filepath.Abs(exportDirName)
-	if err != nil {
-		return "", fmt.Errorf("resolve exports directory: %w", err)
-	}
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("create exports directory: %w", err)
-	}
-
-	return dir, nil
+type exportPromptModel struct {
+	active bool
+	format exportFormat
+	input  textinput.Model
+	err    string
 }
 
-func (m *Model) exportValues(format exportFormat) (string, error) {
+func (m *Model) openExportPrompt() tea.Cmd {
+	input := textinput.New()
+	input.Placeholder = "path/to/export"
+	input.SetValue(m.defaultExportPath(exportFormatJSON))
+	input.Width = m.exportPromptInputWidth()
+
+	cmd := input.Focus()
+
+	m.export = exportPromptModel{
+		active: true,
+		format: exportFormatJSON,
+		input:  input,
+	}
+	m.err = nil
+	m.notice = ""
+	m.resizeViews()
+
+	return cmd
+}
+
+func (m *Model) updateExportPrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			m.closeExportPrompt()
+			m.resizeViews()
+			return m, nil
+		case "tab":
+			m.toggleExportFormat()
+			m.resizeViews()
+			return m, nil
+		case "enter":
+			m.saveExportPrompt()
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.export.input, cmd = m.export.input.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) closeExportPrompt() {
+	m.export = exportPromptModel{}
+}
+
+func (m *Model) resizeExportPrompt() {
+	if !m.export.active {
+		return
+	}
+
+	m.export.input.Width = m.exportPromptInputWidth()
+}
+
+func (m *Model) exportPromptInputWidth() int {
+	width := m.borderedBlockWidth() - 4
+	if width < 20 {
+		return 20
+	}
+
+	return width
+}
+
+func (m *Model) toggleExportFormat() {
+	m.export.err = ""
+	oldFormat := m.export.format
+
+	if m.export.format == exportFormatJSON {
+		m.export.format = exportFormatCSV
+	} else {
+		m.export.format = exportFormatJSON
+	}
+
+	m.export.input.SetValue(swapExportExtension(m.export.input.Value(), oldFormat, m.export.format))
+}
+
+func swapExportExtension(path string, oldFormat exportFormat, newFormat exportFormat) string {
+	oldExt := "." + string(oldFormat)
+	if !strings.EqualFold(filepath.Ext(path), oldExt) {
+		return path
+	}
+
+	return strings.TrimSuffix(path, filepath.Ext(path)) + "." + string(newFormat)
+}
+
+func (m *Model) saveExportPrompt() {
+	path, err := m.exportValues(m.export.input.Value(), m.export.format)
+	if err != nil {
+		m.export.err = err.Error()
+		m.resizeViews()
+		return
+	}
+
+	m.closeExportPrompt()
+	m.setNotice(path)
+}
+
+func (m *Model) exportPopup() string {
+	lines := []string{
+		"Export values",
+		fmt.Sprintf("Format: %s", strings.ToUpper(string(m.export.format))),
+		fmt.Sprintf("Values: %d", len(m.values)),
+		"",
+		"Path",
+		m.export.input.View(),
+		"",
+		"enter save  tab format  esc cancel",
+	}
+
+	if m.export.err != "" {
+		lines = append(lines, "", "Error", m.export.err)
+	}
+
+	return m.popupView(strings.Join(lines, "\n"))
+}
+
+func (m *Model) defaultExportPath(format exportFormat) string {
+	name := sanitizeExportName(m.selectedPath)
+	if name == "" {
+		name = "values"
+	}
+
+	state := "raw"
+	if m.valuesFiltered {
+		state = "filtered"
+	}
+
+	return fmt.Sprintf("%s-%s.%s", name, state, format)
+}
+
+func (m *Model) exportValues(path string, format exportFormat) (string, error) {
+	path, err := normalizeExportPath(path, format)
+	if err != nil {
+		return "", err
+	}
+
 	switch format {
 	case exportFormatJSON:
-		return m.exportValuesJSON()
+		return m.exportValuesJSON(path)
 	case exportFormatCSV:
-		return m.exportValuesCSV()
+		return m.exportValuesCSV(path)
 	default:
 		return "", fmt.Errorf("unsupported export format %q", format)
 	}
 }
 
-func (m *Model) exportValuesJSON() (string, error) {
-	path, err := m.exportPath("json")
+func normalizeExportPath(path string, format exportFormat) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("export path is required")
+	}
+
+	path, err := expandHomePath(path)
 	if err != nil {
 		return "", err
 	}
 
+	if filepath.Ext(path) == "" {
+		path += "." + string(format)
+	}
+
+	path, err = filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("resolve export path: %w", err)
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("create export directory %q: %w", dir, err)
+	}
+
+	return path, nil
+}
+
+func expandHomePath(path string) (string, error) {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+
+	if path == "~" {
+		return home, nil
+	}
+
+	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
+}
+
+func (m *Model) exportValuesJSON(path string) (string, error) {
 	data, err := json.MarshalIndent(m.values, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("encode json export: %w", err)
@@ -61,12 +233,7 @@ func (m *Model) exportValuesJSON() (string, error) {
 	return path, nil
 }
 
-func (m *Model) exportValuesCSV() (string, error) {
-	path, err := m.exportPath("csv")
-	if err != nil {
-		return "", err
-	}
-
+func (m *Model) exportValuesCSV(path string) (string, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return "", fmt.Errorf("create csv export %q: %w", path, err)
@@ -96,25 +263,6 @@ func (m *Model) exportValuesCSV() (string, error) {
 	}
 
 	return path, nil
-}
-
-func (m *Model) exportPath(ext string) (string, error) {
-	dir, err := EnsureExportDir()
-	if err != nil {
-		return "", err
-	}
-
-	name := sanitizeExportName(m.selectedPath)
-	if name == "" {
-		name = "values"
-	}
-
-	state := "raw"
-	if m.valuesFiltered {
-		state = "filtered"
-	}
-
-	return filepath.Join(dir, fmt.Sprintf("%s-%s.%s", name, state, ext)), nil
 }
 
 func sanitizeExportName(value string) string {

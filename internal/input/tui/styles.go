@@ -32,22 +32,30 @@ func (m *Model) renderScreen(sections []string) string {
 }
 
 func (m *Model) screenSections(sections ...string) []string {
-	if m.err == nil && m.notice == "" {
+	if !m.hasPopup() {
 		return sections
 	}
 
-	withError := make([]string, 0, len(sections)+1)
+	withPopup := make([]string, 0, len(sections)+1)
 	for i, section := range sections {
-		withError = append(withError, section)
+		withPopup = append(withPopup, section)
 		if i == 0 {
-			withError = append(withError, m.messagePopup())
+			withPopup = append(withPopup, m.activePopup())
 		}
 	}
 
-	return withError
+	return withPopup
 }
 
-func (m *Model) messagePopup() string {
+func (m *Model) hasPopup() bool {
+	return m.export.active || m.err != nil || m.notice != ""
+}
+
+func (m *Model) activePopup() string {
+	if m.export.active {
+		return m.exportPopup()
+	}
+
 	if m.err != nil {
 		return m.errorPopup()
 	}
@@ -123,8 +131,8 @@ func (m *Model) contentHeight(header string, footer string) int {
 		screenTopPadding -
 		screenChromeSpacing(screenSectionCount)
 
-	if m.err != nil || m.notice != "" {
-		height -= lipgloss.Height(m.messagePopup()) + popupSpacing
+	if m.hasPopup() {
+		height -= lipgloss.Height(m.activePopup()) + popupSpacing
 	}
 
 	if height < minContentHeight {

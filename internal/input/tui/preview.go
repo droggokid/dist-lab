@@ -12,18 +12,18 @@ import (
 const valuesHeading = "Values"
 
 func (m *Model) updatePreview(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.export.active {
+		return m.updateExportPrompt(msg)
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "e":
 			m.toggleEmptyValueFilter()
 			return m, nil
-		case "s":
-			m.exportPreviewValues(exportFormatJSON)
-			return m, nil
-		case "c":
-			m.exportPreviewValues(exportFormatCSV)
-			return m, nil
+		case "x":
+			return m, m.openExportPrompt()
 		}
 	}
 
@@ -54,7 +54,7 @@ func (m *Model) previewFooterText() string {
 		filterAction = "e show raw"
 	}
 
-	return helpFooter("up/down scroll", "pgup/pgdn page", filterAction, "s save json", "c save csv", "f change field", "a add file", "o new file")
+	return helpFooter("up/down scroll", "pgup/pgdn page", filterAction, "x export", "f change field", "a add file", "o new file")
 }
 
 func (m *Model) resizePreview() {
@@ -116,46 +116,80 @@ func (m *Model) valuesStatus() string {
 
 func cloneValues(values []any) []any {
 	cloned := make([]any, len(values))
-	copy(cloned, values)
+	for i, value := range values {
+		cloned[i] = cloneValue(value)
+	}
 	return cloned
+}
+
+func cloneValue(value any) any {
+	switch v := value.(type) {
+	case []any:
+		cloned := make([]any, len(v))
+		for i, item := range v {
+			cloned[i] = cloneValue(item)
+		}
+
+		return cloned
+	case map[string]any:
+		cloned := make(map[string]any, len(v))
+		for key, item := range v {
+			cloned[key] = cloneValue(item)
+		}
+
+		return cloned
+	default:
+		return value
+	}
 }
 
 func filterEmptyValues(values []any) []any {
 	filtered := make([]any, 0, len(values))
 	for _, value := range values {
-		if isEmptyValue(value) {
+		cleaned, empty := cleanEmptyValue(value)
+		if empty {
 			continue
 		}
 
-		filtered = append(filtered, value)
+		filtered = append(filtered, cleaned)
 	}
 
 	return filtered
 }
 
-func isEmptyValue(value any) bool {
+func cleanEmptyValue(value any) (any, bool) {
 	switch v := value.(type) {
 	case nil:
-		return true
+		return nil, true
 	case string:
-		return strings.TrimSpace(v) == ""
+		return v, strings.TrimSpace(v) == ""
 	case []any:
-		return len(v) == 0
+		cleaned := make([]any, 0, len(v))
+		for _, item := range v {
+			cleanedItem, empty := cleanEmptyValue(item)
+			if empty {
+				continue
+			}
+
+			cleaned = append(cleaned, cleanedItem)
+		}
+
+		return cleaned, len(cleaned) == 0
 	case map[string]any:
-		return len(v) == 0
+		cleaned := make(map[string]any, len(v))
+		for key, item := range v {
+			cleanedItem, empty := cleanEmptyValue(item)
+			if empty {
+				continue
+			}
+
+			cleaned[key] = cleanedItem
+		}
+
+		return cleaned, len(cleaned) == 0
 	default:
-		return false
+		return value, false
 	}
-}
-
-func (m *Model) exportPreviewValues(format exportFormat) {
-	path, err := m.exportValues(format)
-	if err != nil {
-		m.setError(err)
-		return
-	}
-
-	m.setNotice(path)
 }
 
 func formatValues(values []any) string {
