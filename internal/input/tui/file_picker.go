@@ -22,7 +22,49 @@ func (m *Model) fileInfoStatus() string {
 		fileDesc = fmt.Sprintf("%d files (latest: %s)", len(m.filePaths), m.filePaths[len(m.filePaths)-1])
 	}
 
-	return fmt.Sprintf("File: %s\nDocs: %d  Fields: %d", fileDesc, m.docCount, m.fieldCount)
+	return fmt.Sprintf("File: %s\nSize: %s\nDocs: %d  Fields: %d", fileDesc, m.fileSizeStatus(), m.docCount, m.fieldCount)
+}
+
+func (m *Model) fileSizeStatus() string {
+	if len(m.fileSizes) == 0 {
+		return "none"
+	}
+
+	if len(m.fileSizes) == 1 {
+		return formatByteSize(m.fileSizes[0])
+	}
+
+	return fmt.Sprintf(
+		"%s total, latest %s",
+		formatByteSize(totalFileSize(m.fileSizes)),
+		formatByteSize(m.fileSizes[len(m.fileSizes)-1]),
+	)
+}
+
+func totalFileSize(sizes []int64) int64 {
+	var total int64
+	for _, size := range sizes {
+		total += size
+	}
+
+	return total
+}
+
+func formatByteSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+
+	value := float64(size)
+	units := []string{"KB", "MB", "GB", "TB"}
+	for _, unit := range units {
+		value /= 1024
+		if value < 1024 {
+			return fmt.Sprintf("%.1f %s", value, unit)
+		}
+	}
+
+	return fmt.Sprintf("%.1f PB", value/1024)
 }
 
 func (m *Model) filePickerView() string {

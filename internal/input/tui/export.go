@@ -128,7 +128,7 @@ func (m *Model) saveExportPrompt() {
 func (m *Model) exportPopup() string {
 	lines := []string{
 		"Export values",
-		fmt.Sprintf("Format: %s", strings.ToUpper(string(m.export.format))),
+		fmt.Sprintf("Format: %s", m.exportFormatLabel()),
 		fmt.Sprintf("Values: %d", len(m.values)),
 		"",
 		"Path",
@@ -142,6 +142,10 @@ func (m *Model) exportPopup() string {
 	}
 
 	return m.popupView(strings.Join(lines, "\n"))
+}
+
+func (m *Model) exportFormatLabel() string {
+	return strings.ToUpper(string(m.export.format))
 }
 
 func (m *Model) defaultExportPath(format exportFormat) string {
@@ -241,28 +245,38 @@ func (m *Model) exportValuesCSV(path string) (string, error) {
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	headers := csvHeaders(m.values)
-	if err := writer.Write(headers); err != nil {
-		return "", fmt.Errorf("write csv header: %w", err)
+
+	records := flattenRecords(m.values)
+	headers := collectHeaders(records)
+	if err := writeRecords(writer, headers, records); err != nil {
+		return "", err
 	}
 
-	for _, value := range m.values {
-		row, err := csvRow(value, headers)
+	return path, nil
+}
+
+func writeRecords(writer *csv.Writer, headers []string, records []csvRecord) error {
+	if err := writer.Write(headers); err != nil {
+		return fmt.Errorf("write csv header: %w", err)
+	}
+
+	for _, record := range records {
+		row, err := rowFromRecord(record, headers)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		if err := writer.Write(row); err != nil {
-			return "", fmt.Errorf("write csv row: %w", err)
+			return fmt.Errorf("write csv row: %w", err)
 		}
 	}
 
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return "", fmt.Errorf("flush csv export: %w", err)
+		return fmt.Errorf("flush csv export: %w", err)
 	}
 
-	return path, nil
+	return nil
 }
 
 func sanitizeExportName(value string) string {
@@ -289,72 +303,77 @@ func sanitizeExportName(value string) string {
 	return strings.Trim(b.String(), "_")
 }
 
-func csvHeaders(values []any) []string {
+type csvRecord map[string]any
+
+func flattenRecords(values []any) []csvRecord {
+	records := make([]csvRecord, len(values))
+	for i, value := range values {
+		records[i] = flattenRecord(value)
+	}
+
+	return records
+}
+
+func flattenRecord(value any) csvRecord {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return csvRecord{"value": value}
+	}
+
+	record := make(csvRecord)
+	flattenObjectFields(record, "", object)
+	if len(record) == 0 {
+		record["value"] = value
+	}
+
+	return record
+}
+
+func collectHeaders(records []csvRecord) []string {
 	keys := make(map[string]struct{})
-	hasObject := false
-	hasValueColumn := len(values) == 0
-
-	for _, value := range values {
-		object, ok := value.(map[string]any)
-		if !ok {
-			hasValueColumn = true
-			continue
-		}
-
-		hasObject = true
-		for key := range object {
+	for _, record := range records {
+		for key := range record {
 			keys[key] = struct{}{}
 		}
 	}
 
-	objectHeaders := make([]string, 0, len(keys))
-	for key := range keys {
-		objectHeaders = append(objectHeaders, key)
-	}
-	sort.Strings(objectHeaders)
-
-	if !hasObject {
+	if len(keys) == 0 {
 		return []string{"value"}
 	}
 
-	if hasValueColumn {
-		valueHeader := uniqueValueHeader(keys)
-		return append([]string{valueHeader}, objectHeaders...)
+	headers := make([]string, 0, len(keys))
+	for key := range keys {
+		headers = append(headers, key)
+	}
+	sort.Strings(headers)
+
+	if _, hasValue := keys["value"]; hasValue && len(headers) > 1 {
+		return append([]string{"value"}, withoutHeader(headers, "value")...)
 	}
 
-	return objectHeaders
+	return headers
 }
 
-func uniqueValueHeader(keys map[string]struct{}) string {
-	header := "value"
-	for {
-		if _, exists := keys[header]; !exists {
-			return header
+func withoutHeader(headers []string, remove string) []string {
+	filtered := make([]string, 0, len(headers)-1)
+	for _, header := range headers {
+		if header != remove {
+			filtered = append(filtered, header)
 		}
-
-		header = "_" + header
 	}
+
+	return filtered
 }
 
-func csvRow(value any, headers []string) ([]string, error) {
+func rowFromRecord(record csvRecord, headers []string) ([]string, error) {
 	row := make([]string, len(headers))
-	object, isObject := value.(map[string]any)
-
-	if !isObject {
-		cell, err := csvCell(value)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(row) > 0 {
-			row[0] = cell
-		}
-
-		return row, nil
-	}
-
 	for i, header := range headers {
-		cell, err := csvCell(object[header])
+		value, exists := record[header]
+		if !exists {
+			continue
+		}
+
+		cell, err := csvCell(value)
 		if err != nil {
 			return nil, err
 		}
@@ -363,6 +382,31 @@ func csvRow(value any, headers []string) ([]string, error) {
 	}
 
 	return row, nil
+}
+
+func flattenObjectFields(record csvRecord, prefix string, object map[string]any) bool {
+	var added bool
+
+	for key, value := range object {
+		header := key
+		if prefix != "" {
+			header = prefix + "." + key
+		}
+
+		nested, ok := value.(map[string]any)
+		if !ok {
+			record[header] = value
+			added = true
+			continue
+		}
+
+		if !flattenObjectFields(record, header, nested) {
+			record[header] = nested
+		}
+		added = true
+	}
+
+	return added
 }
 
 func csvCell(value any) (string, error) {

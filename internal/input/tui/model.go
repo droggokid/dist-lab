@@ -28,6 +28,7 @@ type Model struct {
 	export  exportPromptModel
 
 	filePaths      []string
+	fileSizes      []int64
 	selectedPath   string
 	rawValues      []any
 	values         []any
@@ -111,6 +112,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "o":
 			m.parser = nil
 			m.filePaths = nil
+			m.fileSizes = nil
 			m.clearValues()
 			m.changeState(viewFilePicker)
 			return m, m.picker.Init()
@@ -152,11 +154,19 @@ func (m *Model) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.parser == nil {
 			m.parser = input.NewParser()
 			m.filePaths = []string{}
+			m.fileSizes = []int64{}
 			m.selectedPath = ""
 			m.clearValues()
 		}
 
+		info, err := os.Stat(path)
+		if err != nil {
+			m.setError(fmt.Errorf("stat file %q: %w", path, err))
+			return m, cmd
+		}
+
 		m.filePaths = append(m.filePaths, path)
+		m.fileSizes = append(m.fileSizes, info.Size())
 
 		if err := m.parser.AddFile(path); err != nil {
 			m.setError(err)
