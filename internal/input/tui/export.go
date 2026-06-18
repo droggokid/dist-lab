@@ -11,14 +11,26 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 )
 
 type exportFormat string
 
 const (
-	exportFormatJSON exportFormat = "json"
-	exportFormatCSV  exportFormat = "csv"
+	exportFormatJSON  exportFormat = "json"
+	exportFormatJSONL exportFormat = "jsonl"
+	exportFormatYAML  exportFormat = "yaml"
+	exportFormatCSV   exportFormat = "csv"
+	exportFormatTSV   exportFormat = "tsv"
 )
+
+var exportFormats = []exportFormat{
+	exportFormatJSON,
+	exportFormatJSONL,
+	exportFormatYAML,
+	exportFormatCSV,
+	exportFormatTSV,
+}
 
 type exportPromptModel struct {
 	active bool
@@ -94,23 +106,58 @@ func (m *Model) exportPromptInputWidth() int {
 func (m *Model) toggleExportFormat() {
 	m.export.err = ""
 	oldFormat := m.export.format
-
-	if m.export.format == exportFormatJSON {
-		m.export.format = exportFormatCSV
-	} else {
-		m.export.format = exportFormatJSON
-	}
+	m.export.format = nextExportFormat(m.export.format)
 
 	m.export.input.SetValue(swapExportExtension(m.export.input.Value(), oldFormat, m.export.format))
 }
 
+func nextExportFormat(format exportFormat) exportFormat {
+	for i, supported := range exportFormats {
+		if format == supported {
+			return exportFormats[(i+1)%len(exportFormats)]
+		}
+	}
+
+	return exportFormats[0]
+}
+
 func swapExportExtension(path string, oldFormat exportFormat, newFormat exportFormat) string {
-	oldExt := "." + string(oldFormat)
-	if !strings.EqualFold(filepath.Ext(path), oldExt) {
+	if !exportFormatHasExtension(oldFormat, filepath.Ext(path)) {
 		return path
 	}
 
-	return strings.TrimSuffix(path, filepath.Ext(path)) + "." + string(newFormat)
+	return strings.TrimSuffix(path, filepath.Ext(path)) + "." + exportFormatExtension(newFormat)
+}
+
+func exportFormatHasExtension(format exportFormat, ext string) bool {
+	for _, supportedExt := range exportFormatExtensions(format) {
+		if strings.EqualFold(ext, "."+supportedExt) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func exportFormatExtension(format exportFormat) string {
+	return exportFormatExtensions(format)[0]
+}
+
+func exportFormatExtensions(format exportFormat) []string {
+	switch format {
+	case exportFormatJSON:
+		return []string{"json"}
+	case exportFormatJSONL:
+		return []string{"jsonl", "ndjson"}
+	case exportFormatYAML:
+		return []string{"yaml", "yml"}
+	case exportFormatCSV:
+		return []string{"csv"}
+	case exportFormatTSV:
+		return []string{"tsv"}
+	default:
+		return []string{string(format)}
+	}
 }
 
 func (m *Model) saveExportPrompt() {
@@ -165,7 +212,7 @@ func (m *Model) defaultExportPath(format exportFormat) string {
 		state = "filtered"
 	}
 
-	return fmt.Sprintf("%s-%s.%s", name, state, format)
+	return fmt.Sprintf("%s-%s.%s", name, state, exportFormatExtension(format))
 }
 
 func (m *Model) exportValues(path string, format exportFormat) (string, error) {
@@ -177,8 +224,14 @@ func (m *Model) exportValues(path string, format exportFormat) (string, error) {
 	switch format {
 	case exportFormatJSON:
 		return m.exportValuesJSON(path)
+	case exportFormatJSONL:
+		return m.exportValuesJSONL(path)
+	case exportFormatYAML:
+		return m.exportValuesYAML(path)
 	case exportFormatCSV:
-		return m.exportValuesCSV(path)
+		return m.exportValuesDelimited(path, ',', "csv")
+	case exportFormatTSV:
+		return m.exportValuesDelimited(path, '\t', "tsv")
 	default:
 		return "", fmt.Errorf("unsupported export format %q", format)
 	}
@@ -196,7 +249,7 @@ func normalizeExportPath(path string, format exportFormat) (string, error) {
 	}
 
 	if filepath.Ext(path) == "" {
-		path += "." + string(format)
+		path += "." + exportFormatExtension(format)
 	}
 
 	path, err = filepath.Abs(filepath.Clean(path))
@@ -243,27 +296,58 @@ func (m *Model) exportValuesJSON(path string) (string, error) {
 	return path, nil
 }
 
-func (m *Model) exportValuesCSV(path string) (string, error) {
+func (m *Model) exportValuesJSONL(path string) (string, error) {
 	file, err := os.Create(path)
 	if err != nil {
-		return "", fmt.Errorf("create csv export %q: %w", path, err)
+		return "", fmt.Errorf("create jsonl export %q: %w", path, err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	for _, value := range m.values {
+		if err := encoder.Encode(value); err != nil {
+			return "", fmt.Errorf("encode jsonl export: %w", err)
+		}
+	}
+
+	return path, nil
+}
+
+func (m *Model) exportValuesYAML(path string) (string, error) {
+	data, err := yaml.Marshal(m.values)
+	if err != nil {
+		return "", fmt.Errorf("encode yaml export: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", fmt.Errorf("write yaml export %q: %w", path, err)
+	}
+
+	return path, nil
+}
+
+func (m *Model) exportValuesDelimited(path string, comma rune, formatName string) (string, error) {
+	file, err := os.Create(path)
+	if err != nil {
+		return "", fmt.Errorf("create %s export %q: %w", formatName, path, err)
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
+	writer.Comma = comma
 
 	records := flattenRecords(m.values)
 	headers := collectHeaders(records)
-	if err := writeRecords(writer, headers, records); err != nil {
+	if err := writeRecords(writer, headers, records, formatName); err != nil {
 		return "", err
 	}
 
 	return path, nil
 }
 
-func writeRecords(writer *csv.Writer, headers []string, records []csvRecord) error {
+func writeRecords(writer *csv.Writer, headers []string, records []csvRecord, formatName string) error {
 	if err := writer.Write(headers); err != nil {
-		return fmt.Errorf("write csv header: %w", err)
+		return fmt.Errorf("write %s header: %w", formatName, err)
 	}
 
 	for _, record := range records {
@@ -273,13 +357,13 @@ func writeRecords(writer *csv.Writer, headers []string, records []csvRecord) err
 		}
 
 		if err := writer.Write(row); err != nil {
-			return fmt.Errorf("write csv row: %w", err)
+			return fmt.Errorf("write %s row: %w", formatName, err)
 		}
 	}
 
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return fmt.Errorf("flush csv export: %w", err)
+		return fmt.Errorf("flush %s export: %w", formatName, err)
 	}
 
 	return nil

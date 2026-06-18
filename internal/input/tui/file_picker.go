@@ -82,7 +82,7 @@ func (m *Model) filePickerView() string {
 func (m *Model) filePickerHeader() string {
 	return viewHeader(
 		"File Picker",
-		statusLine(statusItem{label: "Action", value: "Choose a JSON file"}),
+		statusLine(statusItem{label: "Action", value: "Choose a JSON, YAML, CSV, or TSV file"}),
 	)
 }
 

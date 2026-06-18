@@ -39,7 +39,7 @@ type Model struct {
 	width          int
 	height         int
 
-	parser *input.JSONParser
+	parser *input.Parser
 	err    error
 	notice string
 
