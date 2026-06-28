@@ -95,40 +95,35 @@ func (m *Model) previewHeaderText() string {
 }
 
 func (m *Model) previewFooterText() string {
-	filterAction := keyHelp{key: "e", label: "filter nil/empty"}
-	if m.valuesFiltered {
-		filterAction = keyHelp{key: "e", label: "show raw"}
-	}
-
 	if m.previewMode == previewModeValues {
 		return helpFooter(
 			keyHelp{key: "up/down", label: "move"},
 			keyHelp{key: "d", label: "delete"},
 			keyHelp{key: "r", label: "restore"},
 			keyHelp{key: "v", label: "text"},
-			filterAction,
-			keyHelp{key: "i", label: "analysis"},
 			keyHelp{key: "x", label: "export"},
-			keyHelp{key: "f", label: "change field"},
-			keyHelp{key: "a", label: "add file"},
-			keyHelp{key: "o", label: "new file"},
+			keyHelp{key: "?", label: "help"},
 			keyHelp{key: "q", label: "quit"},
 		)
 	}
 
 	return helpFooter(
 		keyHelp{key: "up/down", label: "scroll"},
-		keyHelp{key: "pgup/pgdn", label: "page"},
-		keyHelp{key: "g/G", label: "top/bottom"},
 		keyHelp{key: "v", label: "edit values"},
-		filterAction,
+		m.emptyFilterHelp(),
 		keyHelp{key: "i", label: "analysis"},
 		keyHelp{key: "x", label: "export"},
-		keyHelp{key: "f", label: "change field"},
-		keyHelp{key: "a", label: "add file"},
-		keyHelp{key: "o", label: "new file"},
+		keyHelp{key: "?", label: "help"},
 		keyHelp{key: "q", label: "quit"},
 	)
+}
+
+func (m *Model) emptyFilterHelp() keyHelp {
+	if m.valuesFiltered {
+		return keyHelp{key: "e", label: "show raw"}
+	}
+
+	return keyHelp{key: "e", label: "filter nil/empty"}
 }
 
 func (m *Model) previewModeBadge() string {

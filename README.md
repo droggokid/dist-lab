@@ -29,9 +29,12 @@ Global keys:
 
 - `q`: quit
 - `ctrl+c`: quit
+- `?`: show contextual help
 - `o`: choose a new file
 - `a`: add another file to the current parser
 - `f`: return to field selection from preview
+
+The footer only shows the most relevant actions for the current screen. Use `?` for the full context-specific key list.
 
 Preview keys:
 
@@ -56,6 +59,8 @@ Analysis keys:
 - `n` / `N`: jump between matching fields
 - `enter`: focus the selected field match
 - `p` / `esc`: return to preview
+
+Field picker and field selection keys are also shown in `?` help from those screens.
 
 Export prompt keys:
 

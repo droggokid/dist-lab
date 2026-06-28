@@ -89,7 +89,7 @@ func (m *Model) screenSections(sections ...string) []string {
 }
 
 func (m *Model) hasPopup() bool {
-	return m.export.active || m.err != nil || m.notice != ""
+	return m.export.active || m.err != nil || m.helpActive || m.notice != ""
 }
 
 func (m *Model) activePopup() string {
@@ -99,6 +99,10 @@ func (m *Model) activePopup() string {
 
 	if m.err != nil {
 		return m.errorPopup()
+	}
+
+	if m.helpActive {
+		return m.helpPopup()
 	}
 
 	return m.noticePopup()

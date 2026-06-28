@@ -17,6 +17,7 @@ const (
 	analysisOutlierLimit  = 8
 	analysisBarMaxWidth   = 32
 	analysisBucketCount   = 10
+	analysisDiscreteLimit = 32
 	highCardinalityRate   = 0.8
 )
 
@@ -174,10 +175,9 @@ func (m *Model) analysisFooterText() string {
 	if m.analysisFilterActive {
 		return helpFooter(
 			keyHelp{key: "type", label: "filter"},
-			keyHelp{key: "backspace", label: "edit"},
 			keyHelp{key: "enter", label: "focus"},
-			keyHelp{key: "esc", label: "clear/done"},
-			keyHelp{key: "up/down", label: "scroll"},
+			keyHelp{key: "esc", label: "done"},
+			keyHelp{key: "?", label: "help"},
 			keyHelp{key: "q", label: "quit"},
 		)
 	}
@@ -186,26 +186,28 @@ func (m *Model) analysisFooterText() string {
 		return helpFooter(
 			keyHelp{key: "n/N", label: "next field"},
 			keyHelp{key: "esc", label: "fields"},
-			keyHelp{key: "up/down", label: "scroll"},
-			keyHelp{key: "pgup/pgdn", label: "page"},
 			keyHelp{key: "p", label: "preview"},
+			keyHelp{key: "?", label: "help"},
+			keyHelp{key: "q", label: "quit"},
+		)
+	}
+
+	if m.analysisMode == analysisModeFields {
+		return helpFooter(
+			keyHelp{key: "1/2/3", label: "tabs"},
+			keyHelp{key: "/", label: "filter"},
+			keyHelp{key: "n/N", label: "jump"},
+			keyHelp{key: "enter", label: "focus"},
+			keyHelp{key: "?", label: "help"},
 			keyHelp{key: "q", label: "quit"},
 		)
 	}
 
 	return helpFooter(
-		keyHelp{key: "1", label: "overview"},
-		keyHelp{key: "2", label: "missing"},
-		keyHelp{key: "3", label: "fields"},
-		keyHelp{key: "/", label: "filter"},
-		keyHelp{key: "n/N", label: "jump"},
-		keyHelp{key: "enter", label: "focus"},
+		keyHelp{key: "1/2/3", label: "tabs"},
 		keyHelp{key: "up/down", label: "scroll"},
-		keyHelp{key: "pgup/pgdn", label: "page"},
 		keyHelp{key: "p/esc", label: "preview"},
-		keyHelp{key: "f", label: "change field"},
-		keyHelp{key: "a", label: "add file"},
-		keyHelp{key: "o", label: "new file"},
+		keyHelp{key: "?", label: "help"},
 		keyHelp{key: "q", label: "quit"},
 	)
 }
@@ -977,6 +979,15 @@ func numericAnalysisView(values []float64, width int) []string {
 	}
 
 	lines = append(lines, labelStyle.Render("Distribution"))
+	if discreteNumericDistribution(values) {
+		frequencies := numericValueFrequencies(values)
+		maxCount := maxFrequencyCount(frequencies)
+		for _, frequency := range frequencies {
+			lines = append(lines, frequencyBar(frequency.value, frequency.count, maxCount, len(values), width))
+		}
+		return lines
+	}
+
 	maxCount := maxBucketCount(summary.buckets)
 	for _, bucket := range summary.buckets {
 		label := fmt.Sprintf("%s..%s", formatAnalysisNumber(bucket.start), formatAnalysisNumber(bucket.end))
@@ -1090,6 +1101,44 @@ func numericFrequencies(values []float64, limit int) ([]valueFrequency, valueFre
 	}
 
 	return topFrequencies(frequencies, limit)
+}
+
+func discreteNumericDistribution(values []float64) bool {
+	unique := make(map[float64]struct{})
+	for _, value := range values {
+		if math.Trunc(value) != value {
+			return false
+		}
+		unique[value] = struct{}{}
+		if len(unique) > analysisDiscreteLimit {
+			return false
+		}
+	}
+
+	return len(unique) > 0
+}
+
+func numericValueFrequencies(values []float64) []valueFrequency {
+	counts := make(map[float64]int)
+	for _, value := range values {
+		counts[value]++
+	}
+
+	numbers := make([]float64, 0, len(counts))
+	for value := range counts {
+		numbers = append(numbers, value)
+	}
+	sort.Float64s(numbers)
+
+	frequencies := make([]valueFrequency, 0, len(numbers))
+	for _, value := range numbers {
+		frequencies = append(frequencies, valueFrequency{
+			value: formatAnalysisNumber(value),
+			count: counts[value],
+		})
+	}
+
+	return frequencies
 }
 
 func histogram(values []float64, bucketCount int) []histogramBucket {
