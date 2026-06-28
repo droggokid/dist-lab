@@ -30,7 +30,13 @@ type Model struct {
 	valueList valueListModel
 	export    exportPromptModel
 
-	previewMode previewMode
+	previewMode  previewMode
+	analysisMode analysisMode
+
+	analysisFilterActive bool
+	analysisFilter       string
+	analysisFieldIndex   int
+	analysisFocusedField string
 
 	filePaths      []string
 	fileSizes      []int64
@@ -109,6 +115,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.export.active {
 			return m.updatePreview(msg)
+		}
+
+		if m.state == viewAnalysis && m.analysisFilterActive {
+			if msg.String() == "q" {
+				return m, tea.Quit
+			}
+			break
 		}
 
 		switch msg.String() {

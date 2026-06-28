@@ -49,6 +49,12 @@ Analysis keys:
 
 - `up/down`: scroll analysis
 - `pgup/pgdn`: page through analysis
+- `1`: overview
+- `2`: missing-data ranking
+- `3`: recursive field analysis
+- `/`: filter field paths
+- `n` / `N`: jump between matching fields
+- `enter`: focus the selected field match
 - `p` / `esc`: return to preview
 
 Export prompt keys:
@@ -89,7 +95,7 @@ CSV and TSV exports flatten object fields into columns using dot paths. Scalar v
 
 The nil/empty filter is recursive but row-preserving: if a selected object or array contains nil/empty data anywhere inside it, the whole selected value is filtered out instead of deleting nested fields and changing its shape.
 
-The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It shows scalar summaries, numeric distributions, categorical top values, and boolean counts. For object and array values, analysis recursively summarizes scalar field paths such as `day`, `year`, or `friends[].name`.
+The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It has mode pages for overview, missing-data ranking, and recursive field analysis. Field paths can be filtered with `/`, jumped through with `n` / `N`, and focused with `enter`. Analysis shows scalar summaries, numeric distributions, visible outlier values, categorical top values, cardinality hints, boolean counts, percentages, and missing-data rankings. For object and array values, analysis recursively summarizes scalar field paths such as `day`, `year`, or `friends[].name`. Objects with `day`, `month`, and `year` fields are also summarized as dates in the overview.
 
 ## Development
 

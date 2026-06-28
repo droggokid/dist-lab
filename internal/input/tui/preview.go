@@ -169,6 +169,7 @@ func (m *Model) setValues(values []any) {
 	m.values = cloneValues(values)
 	m.valuesFiltered = false
 	m.previewMode = previewModeText
+	m.resetAnalysisState()
 	m.rebuildValueList(0)
 }
 
@@ -177,6 +178,7 @@ func (m *Model) clearValues() {
 	m.values = nil
 	m.valuesFiltered = false
 	m.previewMode = previewModeText
+	m.resetAnalysisState()
 	m.valueList = valueListModel{}
 	m.preview.SetContent("")
 	m.preview.GotoTop()
