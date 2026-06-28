@@ -56,8 +56,12 @@ func (m *Model) helpPopup() string {
 
 func (m *Model) helpContextLine() string {
 	switch m.state {
+	case viewStart:
+		return "Open an existing file or create generated data."
 	case viewFilePicker:
 		return "Choose a JSON, JSONL, YAML, CSV, or TSV file."
+	case viewCreateDataset:
+		return "Generate a real data file, then load it into the normal field flow."
 	case viewFields:
 		return "Choose the field path to preview."
 	case viewPreview:
@@ -74,6 +78,19 @@ func (m *Model) helpContextLine() string {
 
 func (m *Model) helpSections() []helpSection {
 	switch m.state {
+	case viewStart:
+		return []helpSection{
+			{
+				title: "Start",
+				items: []keyHelp{
+					{key: "up/down", label: "choose"},
+					{key: "enter", label: "select"},
+					{key: "o", label: "open file"},
+					{key: "c", label: "create dataset"},
+				},
+			},
+		}
+
 	case viewFilePicker:
 		return []helpSection{
 			{
@@ -82,6 +99,27 @@ func (m *Model) helpSections() []helpSection {
 					{key: "up/down", label: "move"},
 					{key: "enter", label: "select/open"},
 					{key: "esc", label: "back"},
+				},
+			},
+		}
+
+	case viewCreateDataset:
+		return []helpSection{
+			{
+				title: "Create Dataset",
+				items: []keyHelp{
+					{key: "up/down", label: "move between fields"},
+					{key: "left/right", label: "change selected option"},
+					{key: "enter", label: "create and load file"},
+					{key: "esc", label: "back to start"},
+				},
+			},
+			{
+				title: "Inputs",
+				items: []keyHelp{
+					{key: "Rows", label: "100 or 50..250"},
+					{key: "Choices", label: "comma-separated strings"},
+					{key: "Weights", label: "optional comma-separated weights"},
 				},
 			},
 		}
@@ -176,6 +214,7 @@ func (m *Model) fileHelpSection() helpSection {
 		items: []keyHelp{
 			{key: "a", label: "add file"},
 			{key: "o", label: "new file"},
+			{key: "c", label: "create dataset"},
 		},
 	}
 }

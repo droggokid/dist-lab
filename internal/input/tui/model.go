@@ -14,7 +14,9 @@ import (
 type viewState int
 
 const (
-	viewFilePicker viewState = iota
+	viewStart viewState = iota
+	viewFilePicker
+	viewCreateDataset
 	viewFields
 	viewPreview
 	viewAnalysis
@@ -23,12 +25,15 @@ const (
 type Model struct {
 	state viewState
 
+	startChoice startupChoice
+
 	picker    filepicker.Model
 	fields    fieldsModel
 	preview   viewport.Model
 	analysis  viewport.Model
 	valueList valueListModel
 	export    exportPromptModel
+	create    createDatasetModel
 
 	previewMode  previewMode
 	analysisMode analysisMode
@@ -72,10 +77,12 @@ func NewModel() *Model {
 	fp.SetHeight(defaultContentHeight)
 
 	return &Model{
-		state:    viewFilePicker,
-		picker:   fp,
-		preview:  viewport.New(defaultViewWidth, defaultContentHeight),
-		analysis: viewport.New(defaultViewWidth, defaultContentHeight),
+		state:       viewStart,
+		picker:      fp,
+		preview:     viewport.New(defaultViewWidth, defaultContentHeight),
+		analysis:    viewport.New(defaultViewWidth, defaultContentHeight),
+		create:      newCreateDatasetModel(),
+		startChoice: startupChoiceOpen,
 	}
 }
 
@@ -134,6 +141,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if m.state == viewStart {
+			return m.updateStartup(msg)
+		}
+
+		if m.state == viewCreateDataset {
+			return m.updateCreateDataset(msg)
+		}
+
 		if msg.String() == "?" {
 			m.openHelp()
 			return m, nil
@@ -162,16 +177,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "o":
-			m.parser = nil
-			m.filePaths = nil
-			m.fileSizes = nil
-			m.clearValues()
-			m.changeState(viewFilePicker)
-			return m, m.picker.Init()
+			return m, m.openFilePicker(true)
 
 		case "a":
-			m.changeState(viewFilePicker)
-			return m, m.picker.Init()
+			return m, m.openFilePicker(false)
+
+		case "c":
+			return m, m.openCreateDataset()
 
 		case "f":
 			if (m.state == viewPreview || m.state == viewAnalysis) && m.parser != nil {
@@ -183,8 +195,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.state {
+	case viewStart:
+		return m.updateStartup(msg)
+
 	case viewFilePicker:
 		return m.updateFilePicker(msg)
+
+	case viewCreateDataset:
+		return m.updateCreateDataset(msg)
 
 	case viewPreview:
 		return m.updatePreview(msg)
@@ -206,38 +224,11 @@ func (m *Model) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.picker, cmd = m.picker.Update(msg)
 
 	if didSelect, path := m.picker.DidSelectFile(msg); didSelect {
-		if m.parser == nil {
-			m.parser = input.NewParser()
-			m.filePaths = []string{}
-			m.fileSizes = []int64{}
-			m.selectedPath = ""
-			m.clearValues()
-		}
-
-		info, err := os.Stat(path)
-		if err != nil {
-			m.setError(fmt.Errorf("stat file %q: %w", path, err))
-			return m, cmd
-		}
-
-		m.filePaths = append(m.filePaths, path)
-		m.fileSizes = append(m.fileSizes, info.Size())
-
-		if err := m.parser.AddFile(path); err != nil {
+		if err := m.loadFile(path); err != nil {
 			m.setError(err)
 			return m, cmd
 		}
 
-		if len(m.parser.Fields) == 0 {
-			m.fieldCount = len(m.parser.Fields)
-			m.docCount = len(m.parser.Docs)
-			m.setError(fmt.Errorf("no fields found in combined files"))
-			return m, cmd
-		}
-
-		m.fieldCount = len(m.parser.Fields)
-		m.docCount = len(m.parser.Docs)
-		m.fields = newFieldsModel(m.parser.Fields)
 		m.changeState(viewFields)
 
 		return m, tea.Batch(cmd, m.fields.Init())
@@ -285,8 +276,14 @@ func (m *Model) updateFields(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) View() string {
 	switch m.state {
+	case viewStart:
+		return m.startupView()
+
 	case viewFilePicker:
 		return m.filePickerView()
+
+	case viewCreateDataset:
+		return m.createDatasetView()
 
 	case viewPreview:
 		return m.previewView()
@@ -308,4 +305,67 @@ func (m *Model) resizeViews() {
 	m.resizePreview()
 	m.resizeAnalysis()
 	m.resizeExportPrompt()
+	m.resizeCreateDataset()
+}
+
+func (m *Model) openFilePicker(reset bool) tea.Cmd {
+	if reset {
+		m.resetLoadedData()
+	}
+
+	m.changeState(viewFilePicker)
+	return m.picker.Init()
+}
+
+func (m *Model) openCreateDataset() tea.Cmd {
+	m.create = newCreateDatasetModel()
+	m.changeState(viewCreateDataset)
+	return m.create.focusSelected()
+}
+
+func (m *Model) resetLoadedData() {
+	m.parser = nil
+	m.filePaths = nil
+	m.fileSizes = nil
+	m.selectedPath = ""
+	m.fieldCount = 0
+	m.docCount = 0
+	m.fields = fieldsModel{}
+	m.clearValues()
+}
+
+func (m *Model) ensureParser() {
+	if m.parser != nil {
+		return
+	}
+
+	m.parser = input.NewParser()
+	m.filePaths = []string{}
+	m.fileSizes = []int64{}
+	m.selectedPath = ""
+	m.clearValues()
+}
+
+func (m *Model) loadFile(path string) error {
+	m.ensureParser()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", path, err)
+	}
+
+	if err := m.parser.AddFile(path); err != nil {
+		return err
+	}
+
+	m.filePaths = append(m.filePaths, path)
+	m.fileSizes = append(m.fileSizes, info.Size())
+	m.fieldCount = len(m.parser.Fields)
+	m.docCount = len(m.parser.Docs)
+	if m.fieldCount == 0 {
+		return fmt.Errorf("no fields found in combined files")
+	}
+
+	m.fields = newFieldsModel(m.parser.Fields)
+	return nil
 }

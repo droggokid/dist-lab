@@ -2,11 +2,11 @@
 
 ## Project Context
 
-dist-lab is a Go terminal UI for loading structured data files, discovering available fields, previewing values at a selected field path, editing the current value set, and exporting the result for analysis.
+dist-lab is a Go terminal UI for loading or generating structured data files, discovering available fields, previewing values at a selected field path, editing the current value set, analyzing it, and exporting the result.
 
 The normal workflow is:
 
-1. Pick a supported data file.
+1. Open a supported data file or create a generated dataset.
 2. Select a discovered field path.
 3. Preview the values returned by that path.
 4. Optionally filter, delete, restore, or inspect values.
@@ -18,7 +18,9 @@ The normal workflow is:
 - `cmd/main.go` starts the Bubble Tea program.
 - `internal/input/parser.go` owns input format decoding, jq path discovery, and selection.
 - `internal/input/tui/model.go` owns the top-level TUI state machine.
+- `internal/input/tui/startup.go` renders the startup open/create choice.
 - `internal/input/tui/file_picker.go` renders and sizes the file picker state.
+- `internal/input/tui/create_dataset.go` owns generated dataset form state, validation, generation, and generated-file loading.
 - `internal/input/tui/fields.go` renders and sizes the field selection state.
 - `internal/input/tui/preview.go` owns preview modes, value filtering, value formatting, and value mutation.
 - `internal/input/tui/analysis.go` owns analysis modes, field filtering/focus, scalar analysis, summary stats, histograms, and frequency bars.
@@ -56,6 +58,7 @@ High-value coverage:
 
 - Parser file loading, error cases, path discovery, and field selection.
 - JSON, JSONL/NDJSON, YAML, CSV, and TSV input behavior.
+- Generated dataset validation, numeric/boolean/categorical generation, row-count intervals, and loading generated files through the parser.
 - Recursive nil/empty filtering and clone behavior.
 - Value deletion/restoration and export state.
 - Analysis over current values: numeric stats, quartiles/IQR/outliers, categorical frequencies/cardinality, percentages, missing-data rankings, date-like objects, boolean counts, recursive object/array field paths, and unsupported values.
