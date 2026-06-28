@@ -28,12 +28,23 @@ func TestFilterEmptyValuesRecursive(t *testing.T) {
 
 	want := []any{
 		"keep",
-		map[string]any{
-			"list":   []any{"x", map[string]any{"keep": "y"}},
-			"number": 0,
-			"false":  false,
-		},
-		[]any{"z"},
+	}
+
+	if got := filterEmptyValues(values); !reflect.DeepEqual(got, want) {
+		t.Fatalf("filterEmptyValues() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFilterEmptyValuesDropsWholeObjectWithNestedEmpty(t *testing.T) {
+	values := []any{
+		map[string]any{"day": 3, "month": 9, "year": 2001},
+		map[string]any{"day": 4, "month": 9, "year": nil},
+		map[string]any{"day": 5, "month": 9, "year": 1996},
+	}
+
+	want := []any{
+		map[string]any{"day": 3, "month": 9, "year": 2001},
+		map[string]any{"day": 5, "month": 9, "year": 1996},
 	}
 
 	if got := filterEmptyValues(values); !reflect.DeepEqual(got, want) {
@@ -85,14 +96,14 @@ func TestRestoreValuesKeepsFilterState(t *testing.T) {
 	m.setValues([]any{"a", "", nil, map[string]any{"keep": "b", "drop": ""}})
 	m.toggleEmptyValueFilter()
 
-	if want := []any{"a", map[string]any{"keep": "b"}}; !reflect.DeepEqual(m.values, want) {
+	if want := []any{"a"}; !reflect.DeepEqual(m.values, want) {
 		t.Fatalf("filtered values = %#v, want %#v", m.values, want)
 	}
 
-	m.values = append(m.values[:1], m.values[2:]...)
+	m.values = nil
 	m.restoreValues()
 
-	if want := []any{"a", map[string]any{"keep": "b"}}; !reflect.DeepEqual(m.values, want) {
+	if want := []any{"a"}; !reflect.DeepEqual(m.values, want) {
 		t.Fatalf("restored filtered values = %#v, want %#v", m.values, want)
 	}
 }

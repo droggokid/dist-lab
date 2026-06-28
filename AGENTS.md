@@ -33,6 +33,7 @@ The normal workflow is:
 - Export always uses `values`, not `rawValues`.
 - Analysis always uses `values`, not `rawValues`.
 - Filtering nil/empty values should rebuild `values` from `rawValues`.
+- Filtering is recursive and row-preserving: if a selected value contains nil/empty data anywhere inside it, drop that whole selected value instead of deleting nested fields.
 - Restoring values should rebuild `values` from `rawValues` or the filtered version of `rawValues`, depending on the current filter state.
 - Deleting a value should only affect `values`.
 
@@ -54,7 +55,7 @@ High-value coverage:
 - JSON, JSONL/NDJSON, YAML, CSV, and TSV input behavior.
 - Recursive nil/empty filtering and clone behavior.
 - Value deletion/restoration and export state.
-- Analysis over current values: numeric stats, categorical frequencies, boolean counts, and unsupported values.
+- Analysis over current values: numeric stats, categorical frequencies, boolean counts, recursive object/array field paths, and unsupported values.
 - JSON, JSONL, YAML, CSV, and TSV export output, including flattened object columns.
 - Height calculations for header/content/footer/popup layouts.
 

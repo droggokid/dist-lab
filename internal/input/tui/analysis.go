@@ -24,6 +24,7 @@ type analysisStats struct {
 	categorical map[string]int
 	booleans    map[bool]int
 	unsupported int
+	fields      map[string]*analysisStats
 }
 
 type numericSummary struct {
@@ -140,6 +141,7 @@ func analysisContent(values []any, width int) string {
 			statusItem{label: "Booleans", value: fmt.Sprint(booleanCount(stats.booleans))},
 			statusItem{label: "Empty", value: fmt.Sprint(stats.empty)},
 			statusItem{label: "Unsupported", value: fmt.Sprint(stats.unsupported)},
+			statusItem{label: "Fields", value: fmt.Sprint(len(stats.fields))},
 		),
 	}
 
@@ -158,7 +160,12 @@ func analysisContent(values []any, width int) string {
 		lines = append(lines, booleanAnalysisView(stats.booleans, width)...)
 	}
 
-	if len(stats.numeric) == 0 && len(stats.categorical) == 0 && len(stats.booleans) == 0 {
+	if len(stats.fields) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, fieldsAnalysisView(stats.fields, width)...)
+	}
+
+	if len(stats.numeric) == 0 && len(stats.categorical) == 0 && len(stats.booleans) == 0 && len(stats.fields) == 0 {
 		lines = append(lines, "", "No scalar values to analyze.")
 	}
 
@@ -170,17 +177,95 @@ func analyzeValues(values []any) analysisStats {
 		total:       len(values),
 		categorical: make(map[string]int),
 		booleans:    make(map[bool]int),
+		fields:      make(map[string]*analysisStats),
 	}
 
 	for _, value := range values {
-		classifyAnalysisValue(value, &stats)
+		if !collectAnalysisFields(value, "", &stats) {
+			classifyAnalysisScalar(value, &stats)
+		}
 	}
 
-	sort.Float64s(stats.numeric)
+	sortAnalysisStats(&stats)
 	return stats
 }
 
-func classifyAnalysisValue(value any, stats *analysisStats) {
+func newAnalysisStats() *analysisStats {
+	return &analysisStats{
+		categorical: make(map[string]int),
+		booleans:    make(map[bool]int),
+		fields:      make(map[string]*analysisStats),
+	}
+}
+
+func sortAnalysisStats(stats *analysisStats) {
+	sort.Float64s(stats.numeric)
+	for _, field := range stats.fields {
+		sortAnalysisStats(field)
+	}
+}
+
+func collectAnalysisFields(value any, path string, stats *analysisStats) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		var found bool
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		for _, key := range keys {
+			if collectAnalysisFields(v[key], joinAnalysisPath(path, key), stats) {
+				found = true
+			}
+		}
+		return found
+	case []any:
+		var found bool
+		childPath := path + "[]"
+		if path == "" {
+			childPath = "[]"
+		}
+
+		for _, item := range v {
+			if collectAnalysisFields(item, childPath, stats) {
+				found = true
+			}
+		}
+		return found
+	default:
+		if path == "" {
+			return false
+		}
+
+		field := analysisField(stats, path)
+		field.total++
+		classifyAnalysisScalar(value, field)
+		return true
+	}
+}
+
+func joinAnalysisPath(parent string, child string) string {
+	if parent == "" {
+		return child
+	}
+
+	return parent + "." + child
+}
+
+func analysisField(stats *analysisStats, path string) *analysisStats {
+	field, ok := stats.fields[path]
+	if ok {
+		return field
+	}
+
+	field = newAnalysisStats()
+	stats.fields[path] = field
+	return field
+}
+
+func classifyAnalysisScalar(value any, stats *analysisStats) {
 	switch v := value.(type) {
 	case nil:
 		stats.empty++
@@ -368,6 +453,46 @@ func booleanAnalysisView(values map[bool]int, width int) []string {
 		frequencyBar("true", values[true], maxCount, width),
 		frequencyBar("false", values[false], maxCount, width),
 	)
+
+	return lines
+}
+
+func fieldsAnalysisView(fields map[string]*analysisStats, width int) []string {
+	paths := make([]string, 0, len(fields))
+	for path := range fields {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	lines := []string{
+		titleStyle.Render("Fields"),
+	}
+
+	for _, path := range paths {
+		field := fields[path]
+		lines = append(lines,
+			"",
+			titleStyle.Render("Field")+" "+valueStyle.Render(path),
+			statusLine(
+				statusItem{label: "Total", value: fmt.Sprint(field.total)},
+				statusItem{label: "Numeric", value: fmt.Sprint(len(field.numeric))},
+				statusItem{label: "Categories", value: fmt.Sprint(categoricalCount(field.categorical))},
+				statusItem{label: "Booleans", value: fmt.Sprint(booleanCount(field.booleans))},
+				statusItem{label: "Empty", value: fmt.Sprint(field.empty)},
+				statusItem{label: "Unsupported", value: fmt.Sprint(field.unsupported)},
+			),
+		)
+
+		if len(field.numeric) > 0 {
+			lines = append(lines, numericAnalysisView(field.numeric, width)...)
+		}
+		if len(field.categorical) > 0 {
+			lines = append(lines, categoricalAnalysisView(field.categorical, width)...)
+		}
+		if len(field.booleans) > 0 {
+			lines = append(lines, booleanAnalysisView(field.booleans, width)...)
+		}
+	}
 
 	return lines
 }

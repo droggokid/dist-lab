@@ -21,8 +21,8 @@ func TestAnalyzeValuesClassifiesScalars(t *testing.T) {
 		true,
 		false,
 		true,
-		map[string]any{"unsupported": true},
-		[]any{"unsupported"},
+		map[string]any{},
+		[]any{},
 	}
 
 	stats := analyzeValues(values)
@@ -44,6 +44,44 @@ func TestAnalyzeValuesClassifiesScalars(t *testing.T) {
 	}
 	if stats.unsupported != 2 {
 		t.Fatalf("unsupported = %d, want 2", stats.unsupported)
+	}
+}
+
+func TestAnalyzeValuesCollectsRecursiveObjectFields(t *testing.T) {
+	values := []any{
+		map[string]any{"day": 3, "month": 9, "year": 2001},
+		map[string]any{"day": 3, "month": 9, "year": 2001},
+		map[string]any{"day": 4, "month": 9, "year": 2001},
+		map[string]any{"day": 4, "month": 9, "year": 1996},
+		map[string]any{"day": 4, "month": 9, "year": nil},
+	}
+
+	stats := analyzeValues(values)
+
+	if stats.unsupported != 0 {
+		t.Fatalf("unsupported = %d, want 0", stats.unsupported)
+	}
+	if len(stats.fields) != 3 {
+		t.Fatalf("len(fields) = %d, want 3", len(stats.fields))
+	}
+
+	day := stats.fields["day"]
+	if day == nil {
+		t.Fatal("day field was not analyzed")
+	}
+	if !reflect.DeepEqual(day.numeric, []float64{3, 3, 4, 4, 4}) {
+		t.Fatalf("day numeric = %#v, want [3 3 4 4 4]", day.numeric)
+	}
+
+	year := stats.fields["year"]
+	if year == nil {
+		t.Fatal("year field was not analyzed")
+	}
+	if !reflect.DeepEqual(year.numeric, []float64{1996, 2001, 2001, 2001}) {
+		t.Fatalf("year numeric = %#v, want [1996 2001 2001 2001]", year.numeric)
+	}
+	if year.empty != 1 {
+		t.Fatalf("year empty = %d, want 1", year.empty)
 	}
 }
 
@@ -128,6 +166,30 @@ func TestAnalysisContentRendersNumericCategoricalAndBoolean(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("analysisContent() missing %q in:\n%s", want, content)
 		}
+	}
+}
+
+func TestAnalysisContentRendersObjectFields(t *testing.T) {
+	content := analysisContent([]any{
+		map[string]any{"day": 3, "month": 9, "year": 2001},
+		map[string]any{"day": 4, "month": 9, "year": nil},
+	}, 90)
+
+	for _, want := range []string{
+		"Fields",
+		"Field",
+		"day",
+		"month",
+		"year",
+		"Empty",
+		"Numeric",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("analysisContent() missing %q in:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, "No scalar values to analyze.") {
+		t.Fatalf("analysisContent() should not show no scalar message:\n%s", content)
 	}
 }
 

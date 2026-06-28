@@ -87,7 +87,9 @@ CSV and TSV exports flatten object fields into columns using dot paths. Scalar v
 
 ## Analysis
 
-The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It shows scalar summaries, numeric distributions, categorical top values, and boolean counts. Objects and arrays are counted as unsupported in the first version.
+The nil/empty filter is recursive but row-preserving: if a selected object or array contains nil/empty data anywhere inside it, the whole selected value is filtered out instead of deleting nested fields and changing its shape.
+
+The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It shows scalar summaries, numeric distributions, categorical top values, and boolean counts. For object and array values, analysis recursively summarizes scalar field paths such as `day`, `year`, or `friends[].name`.
 
 ## Development
 
