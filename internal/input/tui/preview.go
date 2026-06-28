@@ -53,6 +53,10 @@ func (m *Model) updatePreview(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "x":
 			return m, m.openExportPrompt()
+		case "i":
+			m.rebuildAnalysis()
+			m.changeState(viewAnalysis)
+			return m, nil
 		}
 	}
 
@@ -103,6 +107,7 @@ func (m *Model) previewFooterText() string {
 			keyHelp{key: "r", label: "restore"},
 			keyHelp{key: "v", label: "text"},
 			filterAction,
+			keyHelp{key: "i", label: "analysis"},
 			keyHelp{key: "x", label: "export"},
 			keyHelp{key: "f", label: "change field"},
 			keyHelp{key: "a", label: "add file"},
@@ -117,6 +122,7 @@ func (m *Model) previewFooterText() string {
 		keyHelp{key: "g/G", label: "top/bottom"},
 		keyHelp{key: "v", label: "edit values"},
 		filterAction,
+		keyHelp{key: "i", label: "analysis"},
 		keyHelp{key: "x", label: "export"},
 		keyHelp{key: "f", label: "change field"},
 		keyHelp{key: "a", label: "add file"},
@@ -163,6 +169,7 @@ func (m *Model) setValues(values []any) {
 	m.values = cloneValues(values)
 	m.valuesFiltered = false
 	m.previewMode = previewModeText
+	m.resetAnalysisState()
 	m.rebuildValueList(0)
 }
 
@@ -171,6 +178,7 @@ func (m *Model) clearValues() {
 	m.values = nil
 	m.valuesFiltered = false
 	m.previewMode = previewModeText
+	m.resetAnalysisState()
 	m.valueList = valueListModel{}
 	m.preview.SetContent("")
 	m.preview.GotoTop()
@@ -190,6 +198,7 @@ func (m *Model) toggleEmptyValueFilter() {
 	}
 
 	m.rebuildValueList(0)
+	m.rebuildAnalysis()
 	m.resizeViews()
 	m.renderValues()
 }
@@ -249,6 +258,7 @@ func (m *Model) deleteSelectedValue() {
 	m.notice = ""
 	m.rebuildValueList(index)
 	m.renderValues()
+	m.rebuildAnalysis()
 	m.resizeViews()
 }
 
@@ -262,6 +272,7 @@ func (m *Model) restoreValues() {
 	m.notice = ""
 	m.rebuildValueList(0)
 	m.renderValues()
+	m.rebuildAnalysis()
 	m.resizeViews()
 }
 
@@ -297,49 +308,46 @@ func cloneValue(value any) any {
 func filterEmptyValues(values []any) []any {
 	filtered := make([]any, 0, len(values))
 	for _, value := range values {
-		cleaned, empty := cleanEmptyValue(value)
-		if empty {
+		if containsEmptyValue(value) {
 			continue
 		}
 
-		filtered = append(filtered, cleaned)
+		filtered = append(filtered, cloneValue(value))
 	}
 
 	return filtered
 }
 
-func cleanEmptyValue(value any) (any, bool) {
+func containsEmptyValue(value any) bool {
 	switch v := value.(type) {
 	case nil:
-		return nil, true
+		return true
 	case string:
-		return v, strings.TrimSpace(v) == ""
+		return strings.TrimSpace(v) == ""
 	case []any:
-		cleaned := make([]any, 0, len(v))
+		if len(v) == 0 {
+			return true
+		}
 		for _, item := range v {
-			cleanedItem, empty := cleanEmptyValue(item)
-			if empty {
-				continue
+			if containsEmptyValue(item) {
+				return true
 			}
-
-			cleaned = append(cleaned, cleanedItem)
 		}
 
-		return cleaned, len(cleaned) == 0
+		return false
 	case map[string]any:
-		cleaned := make(map[string]any, len(v))
-		for key, item := range v {
-			cleanedItem, empty := cleanEmptyValue(item)
-			if empty {
-				continue
+		if len(v) == 0 {
+			return true
+		}
+		for _, item := range v {
+			if containsEmptyValue(item) {
+				return true
 			}
-
-			cleaned[key] = cleanedItem
 		}
 
-		return cleaned, len(cleaned) == 0
+		return false
 	default:
-		return value, false
+		return false
 	}
 }
 

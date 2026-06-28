@@ -42,7 +42,20 @@ Preview keys:
 - `e`: toggle recursive nil/empty filtering
 - `d`: delete the selected value in editable value list mode
 - `r`: restore values from the raw selection
+- `i`: inspect analysis for the current values
 - `x`: open the export prompt
+
+Analysis keys:
+
+- `up/down`: scroll analysis
+- `pgup/pgdn`: page through analysis
+- `1`: overview
+- `2`: missing-data ranking
+- `3`: recursive field analysis
+- `/`: filter field paths
+- `n` / `N`: jump between matching fields
+- `enter`: focus the selected field match
+- `p` / `esc`: return to preview
 
 Export prompt keys:
 
@@ -77,6 +90,12 @@ JSONL export writes one current value per line.
 YAML export writes the current `values` slice as YAML.
 
 CSV and TSV exports flatten object fields into columns using dot paths. Scalar values are written to a `value` column. Nested arrays and complex values inside a cell are JSON-encoded.
+
+## Analysis
+
+The nil/empty filter is recursive but row-preserving: if a selected object or array contains nil/empty data anywhere inside it, the whole selected value is filtered out instead of deleting nested fields and changing its shape.
+
+The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It has mode pages for overview, missing-data ranking, and recursive field analysis. Field paths can be filtered with `/`, jumped through with `n` / `N`, and focused with `enter`. Analysis shows scalar summaries, numeric distributions, visible outlier values, categorical top values, cardinality hints, boolean counts, percentages, and missing-data rankings. For object and array values, analysis recursively summarizes scalar field paths such as `day`, `year`, or `friends[].name`. Objects with `day`, `month`, and `year` fields are also summarized as dates in the overview.
 
 ## Development
 
