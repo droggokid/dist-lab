@@ -17,6 +17,7 @@ const (
 	viewFilePicker viewState = iota
 	viewFields
 	viewPreview
+	viewAnalysis
 )
 
 type Model struct {
@@ -25,6 +26,7 @@ type Model struct {
 	picker    filepicker.Model
 	fields    fieldsModel
 	preview   viewport.Model
+	analysis  viewport.Model
 	valueList valueListModel
 	export    exportPromptModel
 
@@ -62,9 +64,10 @@ func NewModel() *Model {
 	fp.SetHeight(defaultContentHeight)
 
 	return &Model{
-		state:   viewFilePicker,
-		picker:  fp,
-		preview: viewport.New(defaultViewWidth, defaultContentHeight),
+		state:    viewFilePicker,
+		picker:   fp,
+		preview:  viewport.New(defaultViewWidth, defaultContentHeight),
+		analysis: viewport.New(defaultViewWidth, defaultContentHeight),
 	}
 }
 
@@ -125,7 +128,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.picker.Init()
 
 		case "f":
-			if m.state == viewPreview && m.parser != nil {
+			if (m.state == viewPreview || m.state == viewAnalysis) && m.parser != nil {
 				m.fields = newFieldsModel(m.parser.Fields)
 				m.changeState(viewFields)
 				return m, m.fields.Init()
@@ -139,6 +142,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case viewPreview:
 		return m.updatePreview(msg)
+
+	case viewAnalysis:
+		return m.updateAnalysis(msg)
 
 	case viewFields:
 		return m.updateFields(msg)
@@ -224,6 +230,9 @@ func (m *Model) View() string {
 	case viewPreview:
 		return m.previewView()
 
+	case viewAnalysis:
+		return m.analysisView()
+
 	case viewFields:
 		return m.fieldsView()
 
@@ -236,5 +245,6 @@ func (m *Model) resizeViews() {
 	m.resizeFilePicker()
 	m.resizeFields()
 	m.resizePreview()
+	m.resizeAnalysis()
 	m.resizeExportPrompt()
 }

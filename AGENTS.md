@@ -10,7 +10,8 @@ The normal workflow is:
 2. Select a discovered field path.
 3. Preview the values returned by that path.
 4. Optionally filter, delete, restore, or inspect values.
-5. Export the current values to JSON, JSONL, YAML, CSV, or TSV.
+5. Analyze the current editable values.
+6. Export the current values to JSON, JSONL, YAML, CSV, or TSV.
 
 ## Architecture
 
@@ -20,6 +21,7 @@ The normal workflow is:
 - `internal/input/tui/file_picker.go` renders and sizes the file picker state.
 - `internal/input/tui/fields.go` renders and sizes the field selection state.
 - `internal/input/tui/preview.go` owns preview modes, value filtering, value formatting, and value mutation.
+- `internal/input/tui/analysis.go` owns scalar analysis, summary stats, histograms, and frequency bars.
 - `internal/input/tui/value_list.go` owns the editable value list and selected-value detail panel.
 - `internal/input/tui/export.go` owns export prompt state and JSON/JSONL/YAML/CSV/TSV export.
 - `internal/input/tui/styles.go` owns shared layout, header/footer/popup rendering, and style helpers.
@@ -29,6 +31,7 @@ The normal workflow is:
 - `rawValues` is the source value set returned by the parser for the selected field.
 - `values` is the current editable/exportable value set.
 - Export always uses `values`, not `rawValues`.
+- Analysis always uses `values`, not `rawValues`.
 - Filtering nil/empty values should rebuild `values` from `rawValues`.
 - Restoring values should rebuild `values` from `rawValues` or the filtered version of `rawValues`, depending on the current filter state.
 - Deleting a value should only affect `values`.
@@ -51,6 +54,7 @@ High-value coverage:
 - JSON, JSONL/NDJSON, YAML, CSV, and TSV input behavior.
 - Recursive nil/empty filtering and clone behavior.
 - Value deletion/restoration and export state.
+- Analysis over current values: numeric stats, categorical frequencies, boolean counts, and unsupported values.
 - JSON, JSONL, YAML, CSV, and TSV export output, including flattened object columns.
 - Height calculations for header/content/footer/popup layouts.
 

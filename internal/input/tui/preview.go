@@ -53,6 +53,10 @@ func (m *Model) updatePreview(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "x":
 			return m, m.openExportPrompt()
+		case "i":
+			m.rebuildAnalysis()
+			m.changeState(viewAnalysis)
+			return m, nil
 		}
 	}
 
@@ -103,6 +107,7 @@ func (m *Model) previewFooterText() string {
 			keyHelp{key: "r", label: "restore"},
 			keyHelp{key: "v", label: "text"},
 			filterAction,
+			keyHelp{key: "i", label: "analysis"},
 			keyHelp{key: "x", label: "export"},
 			keyHelp{key: "f", label: "change field"},
 			keyHelp{key: "a", label: "add file"},
@@ -117,6 +122,7 @@ func (m *Model) previewFooterText() string {
 		keyHelp{key: "g/G", label: "top/bottom"},
 		keyHelp{key: "v", label: "edit values"},
 		filterAction,
+		keyHelp{key: "i", label: "analysis"},
 		keyHelp{key: "x", label: "export"},
 		keyHelp{key: "f", label: "change field"},
 		keyHelp{key: "a", label: "add file"},
@@ -190,6 +196,7 @@ func (m *Model) toggleEmptyValueFilter() {
 	}
 
 	m.rebuildValueList(0)
+	m.rebuildAnalysis()
 	m.resizeViews()
 	m.renderValues()
 }
@@ -249,6 +256,7 @@ func (m *Model) deleteSelectedValue() {
 	m.notice = ""
 	m.rebuildValueList(index)
 	m.renderValues()
+	m.rebuildAnalysis()
 	m.resizeViews()
 }
 
@@ -262,6 +270,7 @@ func (m *Model) restoreValues() {
 	m.notice = ""
 	m.rebuildValueList(0)
 	m.renderValues()
+	m.rebuildAnalysis()
 	m.resizeViews()
 }
 

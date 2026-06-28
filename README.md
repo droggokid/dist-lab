@@ -42,7 +42,14 @@ Preview keys:
 - `e`: toggle recursive nil/empty filtering
 - `d`: delete the selected value in editable value list mode
 - `r`: restore values from the raw selection
+- `i`: inspect analysis for the current values
 - `x`: open the export prompt
+
+Analysis keys:
+
+- `up/down`: scroll analysis
+- `pgup/pgdn`: page through analysis
+- `p` / `esc`: return to preview
 
 Export prompt keys:
 
@@ -77,6 +84,10 @@ JSONL export writes one current value per line.
 YAML export writes the current `values` slice as YAML.
 
 CSV and TSV exports flatten object fields into columns using dot paths. Scalar values are written to a `value` column. Nested arrays and complex values inside a cell are JSON-encoded.
+
+## Analysis
+
+The analysis view uses the current editable `values`, so filtering and deleted rows are reflected immediately. It shows scalar summaries, numeric distributions, categorical top values, and boolean counts. Objects and arrays are counted as unsupported in the first version.
 
 ## Development
 
