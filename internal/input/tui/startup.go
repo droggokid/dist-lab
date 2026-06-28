@@ -23,7 +23,7 @@ var startupChoices = []struct {
 	},
 	{
 		title:       "Create dataset",
-		description: "Generate numeric, boolean, or categorical data.",
+		description: "Generate scalar, list, or matrix data.",
 	},
 }
 

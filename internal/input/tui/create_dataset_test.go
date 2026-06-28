@@ -144,6 +144,163 @@ func TestGenerateCategoricalDatasetUsesChoicesAndWeights(t *testing.T) {
 	}
 }
 
+func TestGenerateListDatasetWrapsScalarGenerator(t *testing.T) {
+	values, err := generateDataset(datasetGenerationConfig{
+		template:        generatedTemplateList,
+		elementKind:     generatedValueBoolean,
+		fieldName:       "flags",
+		rows:            "2",
+		listLength:      "3",
+		trueProbability: "1",
+	}, rand.New(rand.NewSource(1)))
+	if err != nil {
+		t.Fatalf("generateDataset() error = %v", err)
+	}
+
+	if len(values) != 2 {
+		t.Fatalf("len(values) = %d, want 2", len(values))
+	}
+	for _, value := range values {
+		flags, ok := value.(map[string]any)["flags"].([]any)
+		if !ok {
+			t.Fatalf("flags type = %T, want []any", value.(map[string]any)["flags"])
+		}
+		if len(flags) != 3 {
+			t.Fatalf("len(flags) = %d, want 3", len(flags))
+		}
+		for _, flag := range flags {
+			if flag != true {
+				t.Fatalf("flag = %v, want true", flag)
+			}
+		}
+	}
+}
+
+func TestGenerateMatrixDatasetWrapsScalarGenerator(t *testing.T) {
+	values, err := generateDataset(datasetGenerationConfig{
+		template:      generatedTemplateMatrix,
+		elementKind:   generatedValueNumeric,
+		numberKind:    generatedNumberInteger,
+		fieldName:     "matrix",
+		rows:          "2",
+		matrixRows:    "2",
+		matrixColumns: "3",
+		min:           "1",
+		max:           "1",
+	}, rand.New(rand.NewSource(1)))
+	if err != nil {
+		t.Fatalf("generateDataset() error = %v", err)
+	}
+
+	if len(values) != 2 {
+		t.Fatalf("len(values) = %d, want 2", len(values))
+	}
+	for _, value := range values {
+		matrix, ok := value.(map[string]any)["matrix"].([]any)
+		if !ok {
+			t.Fatalf("matrix type = %T, want []any", value.(map[string]any)["matrix"])
+		}
+		if len(matrix) != 2 {
+			t.Fatalf("len(matrix) = %d, want 2", len(matrix))
+		}
+		for _, row := range matrix {
+			cells, ok := row.([]any)
+			if !ok {
+				t.Fatalf("matrix row type = %T, want []any", row)
+			}
+			if len(cells) != 3 {
+				t.Fatalf("len(matrix row) = %d, want 3", len(cells))
+			}
+			for _, cell := range cells {
+				if cell != 1 {
+					t.Fatalf("matrix cell = %v, want 1", cell)
+				}
+			}
+		}
+	}
+}
+
+func TestGenerateDatasetRejectsOversizedCompositeData(t *testing.T) {
+	_, err := generateDataset(datasetGenerationConfig{
+		template:      generatedTemplateMatrix,
+		elementKind:   generatedValueNumeric,
+		numberKind:    generatedNumberInteger,
+		fieldName:     "matrix",
+		rows:          "2",
+		matrixRows:    "1000",
+		matrixColumns: "1000",
+		min:           "0",
+		max:           "1",
+	}, rand.New(rand.NewSource(1)))
+	if err == nil {
+		t.Fatal("generateDataset() error = nil, want cell budget error")
+	}
+}
+
+func TestGeneratedCellBudgetBoundaries(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+
+	spec, err := newDatasetGeneratorSpec(datasetGenerationConfig{
+		template:    generatedTemplateList,
+		elementKind: generatedValueNumeric,
+		numberKind:  generatedNumberInteger,
+		fieldName:   "values",
+		rows:        "1000",
+		listLength:  "1000",
+		min:         "1",
+		max:         "1",
+	}, rng)
+	if err != nil {
+		t.Fatalf("newDatasetGeneratorSpec(exact cap) error = %v", err)
+	}
+	if spec.rowCount != 1000 || spec.cellsPerRow != 1000 {
+		t.Fatalf("spec = %#v, want rowCount=1000 cellsPerRow=1000", spec)
+	}
+
+	_, err = newDatasetGeneratorSpec(datasetGenerationConfig{
+		template:    generatedTemplateList,
+		elementKind: generatedValueNumeric,
+		numberKind:  generatedNumberInteger,
+		fieldName:   "values",
+		rows:        "1001",
+		listLength:  "1000",
+		min:         "1",
+		max:         "1",
+	}, rng)
+	if err == nil {
+		t.Fatal("newDatasetGeneratorSpec(one over cap) error = nil, want error")
+	}
+
+	_, err = newDatasetGeneratorSpec(datasetGenerationConfig{
+		template:      generatedTemplateMatrix,
+		elementKind:   generatedValueNumeric,
+		numberKind:    generatedNumberInteger,
+		fieldName:     "matrix",
+		rows:          "1",
+		matrixRows:    "1000001",
+		matrixColumns: "2",
+		min:           "1",
+		max:           "1",
+	}, rng)
+	if err == nil {
+		t.Fatal("newDatasetGeneratorSpec(huge matrix) error = nil, want error")
+	}
+
+	_, err = newDatasetGeneratorSpec(datasetGenerationConfig{
+		template:    generatedTemplateList,
+		elementKind: generatedValueNumeric,
+		numberKind:  generatedNumberInteger,
+		fieldName:   "values",
+		rows:        "100000",
+		listLength:  "11",
+		min:         "1",
+		max:         "1",
+	}, rng)
+	if err == nil {
+		t.Fatal("newDatasetGeneratorSpec(huge row count composite) error = nil, want error")
+	}
+}
+
 func TestGenerateDatasetSupportsRandomRowInterval(t *testing.T) {
 	values, err := generateDataset(datasetGenerationConfig{
 		template:   generatedTemplateNumeric,
@@ -220,6 +377,140 @@ func TestGenerateDatasetValidation(t *testing.T) {
 				t.Fatal("generateDataset() error = nil, want error")
 			}
 		})
+	}
+}
+
+func TestGeneratedCompositeFilesRoundTripThroughParser(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     datasetGenerationConfig
+		wantString string
+	}{
+		{
+			name: "list",
+			config: datasetGenerationConfig{
+				template:    generatedTemplateList,
+				elementKind: generatedValueNumeric,
+				numberKind:  generatedNumberInteger,
+				fieldName:   "value",
+				rows:        "2",
+				listLength:  "3",
+				min:         "1",
+				max:         "1",
+			},
+			wantString: "[1,1,1]",
+		},
+		{
+			name: "matrix",
+			config: datasetGenerationConfig{
+				template:      generatedTemplateMatrix,
+				elementKind:   generatedValueNumeric,
+				numberKind:    generatedNumberInteger,
+				fieldName:     "value",
+				rows:          "2",
+				matrixRows:    "2",
+				matrixColumns: "2",
+				min:           "1",
+				max:           "1",
+			},
+			wantString: "[[1,1],[1,1]]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values, err := generateDataset(tt.config, rand.New(rand.NewSource(1)))
+			if err != nil {
+				t.Fatalf("generateDataset() error = %v", err)
+			}
+
+			for _, format := range exportFormats {
+				t.Run(string(format), func(t *testing.T) {
+					path, err := writeValues(filepath.Join(t.TempDir(), "generated"), format, values)
+					if err != nil {
+						t.Fatalf("writeValues(%s) error = %v", format, err)
+					}
+
+					parser := input.NewParser()
+					if err := parser.AddFile(path); err != nil {
+						t.Fatalf("AddFile(%s) error = %v", format, err)
+					}
+					if len(parser.Fields) == 0 {
+						t.Fatalf("parser fields empty for %s", format)
+					}
+
+					selected, err := parser.HandleSelection(generatedRoundTripPath(format), parser.Docs)
+					if err != nil {
+						t.Fatalf("HandleSelection(%s) error = %v", format, err)
+					}
+					if len(selected) != 2 {
+						t.Fatalf("selected len = %d, want 2 for %s", len(selected), format)
+					}
+
+					switch format {
+					case exportFormatCSV, exportFormatTSV:
+						if selected[0] != tt.wantString {
+							t.Fatalf("selected[0] = %#v, want %q for %s", selected[0], tt.wantString, format)
+						}
+					default:
+						if _, ok := selected[0].([]any); !ok {
+							t.Fatalf("selected[0] type = %T, want []any for %s", selected[0], format)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func generatedRoundTripPath(format exportFormat) string {
+	switch format {
+	case exportFormatJSON, exportFormatYAML:
+		return "$[].value"
+	default:
+		return "$.value"
+	}
+}
+
+func TestCreateDatasetVisibleRowsForCompositeTemplates(t *testing.T) {
+	model := newCreateDatasetModel()
+	model.template = generatedTemplateList
+	model.elementKind = generatedValueCategorical
+
+	want := []createDatasetRow{
+		createRowTemplate,
+		createRowFieldName,
+		createRowRows,
+		createRowElementKind,
+		createRowListLength,
+		createRowChoices,
+		createRowWeights,
+		createRowFormat,
+		createRowPath,
+	}
+	if got := model.visibleRows(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("list visibleRows() = %#v, want %#v", got, want)
+	}
+
+	model.template = generatedTemplateMatrix
+	model.elementKind = generatedValueNumeric
+
+	want = []createDatasetRow{
+		createRowTemplate,
+		createRowFieldName,
+		createRowRows,
+		createRowElementKind,
+		createRowMatrixRows,
+		createRowMatrixColumns,
+		createRowNumberKind,
+		createRowMin,
+		createRowMax,
+		createRowDistribution,
+		createRowFormat,
+		createRowPath,
+	}
+	if got := model.visibleRows(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("matrix visibleRows() = %#v, want %#v", got, want)
 	}
 }
 

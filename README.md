@@ -103,8 +103,10 @@ Templates:
 - Numeric: integer or decimal values with min/max bounds and uniform or bounded-normal distribution.
 - Boolean: true/false values controlled by a true probability from `0` to `1`.
 - Categorical: string choices from a comma-separated list, with optional comma-separated weights.
+- List: arrays of generated numeric, boolean, or categorical values.
+- Matrix: arrays of arrays of generated numeric, boolean, or categorical values.
 
-Rows can be a fixed count such as `100` or a random interval such as `50..250`.
+Rows can be a fixed count such as `100` or a random interval such as `50..250`. Generated composite datasets are capped at one million scalar cells to avoid accidentally creating huge files.
 
 ## Exports
 
