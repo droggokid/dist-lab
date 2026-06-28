@@ -221,17 +221,30 @@ func (m *Model) exportValues(path string, format exportFormat) (string, error) {
 		return "", err
 	}
 
+	return writeValuesToPath(path, format, m.values)
+}
+
+func writeValues(path string, format exportFormat, values []any) (string, error) {
+	path, err := normalizeExportPath(path, format)
+	if err != nil {
+		return "", err
+	}
+
+	return writeValuesToPath(path, format, values)
+}
+
+func writeValuesToPath(path string, format exportFormat, values []any) (string, error) {
 	switch format {
 	case exportFormatJSON:
-		return m.exportValuesJSON(path)
+		return writeValuesJSON(path, values)
 	case exportFormatJSONL:
-		return m.exportValuesJSONL(path)
+		return writeValuesJSONL(path, values)
 	case exportFormatYAML:
-		return m.exportValuesYAML(path)
+		return writeValuesYAML(path, values)
 	case exportFormatCSV:
-		return m.exportValuesDelimited(path, ',', "csv")
+		return writeValuesDelimited(path, ',', "csv", values)
 	case exportFormatTSV:
-		return m.exportValuesDelimited(path, '\t', "tsv")
+		return writeValuesDelimited(path, '\t', "tsv", values)
 	default:
 		return "", fmt.Errorf("unsupported export format %q", format)
 	}
@@ -282,8 +295,8 @@ func expandHomePath(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
 
-func (m *Model) exportValuesJSON(path string) (string, error) {
-	data, err := json.MarshalIndent(m.values, "", "  ")
+func writeValuesJSON(path string, values []any) (string, error) {
+	data, err := json.MarshalIndent(values, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("encode json export: %w", err)
 	}
@@ -296,7 +309,7 @@ func (m *Model) exportValuesJSON(path string) (string, error) {
 	return path, nil
 }
 
-func (m *Model) exportValuesJSONL(path string) (string, error) {
+func writeValuesJSONL(path string, values []any) (string, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return "", fmt.Errorf("create jsonl export %q: %w", path, err)
@@ -304,7 +317,7 @@ func (m *Model) exportValuesJSONL(path string) (string, error) {
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	for _, value := range m.values {
+	for _, value := range values {
 		if err := encoder.Encode(value); err != nil {
 			return "", fmt.Errorf("encode jsonl export: %w", err)
 		}
@@ -313,8 +326,8 @@ func (m *Model) exportValuesJSONL(path string) (string, error) {
 	return path, nil
 }
 
-func (m *Model) exportValuesYAML(path string) (string, error) {
-	data, err := yaml.Marshal(m.values)
+func writeValuesYAML(path string, values []any) (string, error) {
+	data, err := yaml.Marshal(values)
 	if err != nil {
 		return "", fmt.Errorf("encode yaml export: %w", err)
 	}
@@ -326,7 +339,7 @@ func (m *Model) exportValuesYAML(path string) (string, error) {
 	return path, nil
 }
 
-func (m *Model) exportValuesDelimited(path string, comma rune, formatName string) (string, error) {
+func writeValuesDelimited(path string, comma rune, formatName string, values []any) (string, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return "", fmt.Errorf("create %s export %q: %w", formatName, path, err)
@@ -336,7 +349,7 @@ func (m *Model) exportValuesDelimited(path string, comma rune, formatName string
 	writer := csv.NewWriter(file)
 	writer.Comma = comma
 
-	records := flattenRecords(m.values)
+	records := flattenRecords(values)
 	headers := collectHeaders(records)
 	if err := writeRecords(writer, headers, records, formatName); err != nil {
 		return "", err

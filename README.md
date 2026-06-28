@@ -16,12 +16,12 @@ go build -o dist-lab ./cmd
 
 ## Workflow
 
-1. Pick a supported data file in the file picker.
+1. Open a supported data file or create a generated dataset from the startup screen.
 2. Choose a discovered field path.
 3. Preview the values returned by that path.
 4. Switch between text preview and editable value list.
 5. Filter nil/empty values, delete individual values, or restore from the raw selection.
-6. Export the current values to JSON, JSONL, YAML, CSV, or TSV.
+6. Analyze or export the current values to JSON, JSONL, YAML, CSV, or TSV.
 
 ## Keys
 
@@ -32,6 +32,7 @@ Global keys:
 - `?`: show contextual help
 - `o`: choose a new file
 - `a`: add another file to the current parser
+- `c`: create a generated dataset
 - `f`: return to field selection from preview
 
 The footer only shows the most relevant actions for the current screen. Use `?` for the full context-specific key list.
@@ -62,6 +63,13 @@ Analysis keys:
 
 Field picker and field selection keys are also shown in `?` help from those screens.
 
+Create dataset keys:
+
+- `up/down`: move between generator fields
+- `left/right`: change selected options such as template, distribution, or format
+- `enter`: create the file and load it
+- `esc`: return to the startup screen
+
 Export prompt keys:
 
 - `enter`: save export
@@ -86,6 +94,18 @@ $.viewer.friends[].name
 $["column with spaces"]
 ```
 
+## Generated Data
+
+The create flow writes a real file and loads it through the same parser as normal imports. It currently generates object rows with one configurable field, defaulting to `value`.
+
+Templates:
+
+- Numeric: integer or decimal values with min/max bounds and uniform or bounded-normal distribution.
+- Boolean: true/false values controlled by a true probability from `0` to `1`.
+- Categorical: string choices from a comma-separated list, with optional comma-separated weights.
+
+Rows can be a fixed count such as `100` or a random interval such as `50..250`.
+
 ## Exports
 
 JSON export writes the current `values` slice with indentation.
@@ -109,4 +129,4 @@ go build ./...
 go test ./...
 ```
 
-The TUI is organized around three states: file picker, field selection, and preview. Shared layout and styling lives in `internal/input/tui/styles.go`.
+The TUI is organized around startup, file picker, generated dataset, field selection, preview, and analysis states. Shared layout and styling lives in `internal/input/tui/styles.go`.
