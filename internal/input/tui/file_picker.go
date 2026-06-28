@@ -70,7 +70,7 @@ func formatByteSize(size int64) string {
 }
 
 func (m *Model) filePickerView() string {
-	content := m.picker.View()
+	content := strings.TrimSuffix(m.picker.View(), "\n")
 
 	return m.screenView(
 		m.filePickerHeader(),
@@ -82,7 +82,7 @@ func (m *Model) filePickerView() string {
 func (m *Model) filePickerHeader() string {
 	return viewHeader(
 		"File Picker",
-		statusLine(statusItem{label: "Action", value: "Choose a JSON, YAML, CSV, or TSV file"}),
+		m.fileInfoStatus(),
 	)
 }
 
@@ -90,6 +90,7 @@ func (m *Model) filePickerFooter() string {
 	return helpFooter(
 		keyHelp{key: "enter", label: "select/open"},
 		keyHelp{key: "esc", label: "back"},
+		keyHelp{key: "?", label: "help"},
 		keyHelp{key: "q", label: "quit"},
 	)
 }

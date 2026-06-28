@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"strings"
@@ -211,6 +212,35 @@ func TestAnalysisContentRendersOutlierValuesWithoutQuartileJargon(t *testing.T) 
 	for _, unwanted := range []string{"Q1", "Q3", "IQR"} {
 		if strings.Contains(content, unwanted) {
 			t.Fatalf("analysisContent() should not show %q in:\n%s", unwanted, content)
+		}
+	}
+}
+
+func TestNumericAnalysisRendersSmallIntegerDomainsAsDiscreteValues(t *testing.T) {
+	values := []any{
+		map[string]any{"month": 1},
+		map[string]any{"month": 1},
+		map[string]any{"month": 2},
+		map[string]any{"month": 12},
+		map[string]any{"month": 12},
+		map[string]any{"month": 12},
+	}
+
+	content := analysisContentForState(values, 90, analysisViewState{mode: analysisModeFields})
+
+	for _, unwanted := range []string{"1..", "2.1", "10.9"} {
+		if strings.Contains(content, unwanted) {
+			t.Fatalf("integer distribution should not use decimal histogram bucket %q in:\n%s", unwanted, content)
+		}
+	}
+
+	for _, want := range []string{
+		fmt.Sprintf("%-24s", "1"),
+		fmt.Sprintf("%-24s", "2"),
+		fmt.Sprintf("%-24s", "12"),
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("integer distribution missing label %q in:\n%s", want, content)
 		}
 	}
 }

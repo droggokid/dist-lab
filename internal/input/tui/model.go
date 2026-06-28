@@ -33,6 +33,8 @@ type Model struct {
 	previewMode  previewMode
 	analysisMode analysisMode
 
+	helpActive bool
+
 	analysisFilterActive bool
 	analysisFilter       string
 	analysisFieldIndex   int
@@ -85,6 +87,7 @@ func (m *Model) changeState(state viewState) {
 	m.state = state
 	m.err = nil
 	m.notice = ""
+	m.helpActive = false
 	m.closeExportPrompt()
 	m.resizeViews()
 }
@@ -92,12 +95,14 @@ func (m *Model) changeState(state viewState) {
 func (m *Model) setError(err error) {
 	m.err = err
 	m.notice = ""
+	m.helpActive = false
 	m.resizeViews()
 }
 
 func (m *Model) setNotice(notice string) {
 	m.notice = notice
 	m.err = nil
+	m.helpActive = false
 	m.resizeViews()
 }
 
@@ -115,6 +120,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.export.active {
 			return m.updatePreview(msg)
+		}
+
+		if m.helpActive {
+			switch msg.String() {
+			case "q":
+				return m, tea.Quit
+			case "?", "esc":
+				m.closeHelp()
+				return m, nil
+			default:
+				return m, nil
+			}
+		}
+
+		if msg.String() == "?" {
+			m.openHelp()
+			return m, nil
+		}
+
+		if msg.String() == "esc" && m.clearTransientPopup() {
+			return m, nil
+		}
+
+		if m.state == viewFields && m.fields.Filtering() {
+			if msg.String() == "q" {
+				return m, tea.Quit
+			}
+			break
 		}
 
 		if m.state == viewAnalysis && m.analysisFilterActive {
@@ -215,6 +248,21 @@ func (m *Model) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateFields(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" && !m.fields.Filtering() {
+		if m.selectedPath != "" {
+			m.changeState(viewPreview)
+			m.renderValues()
+			return m, nil
+		}
+
+		m.parser = nil
+		m.filePaths = nil
+		m.fileSizes = nil
+		m.clearValues()
+		m.changeState(viewFilePicker)
+		return m, m.picker.Init()
+	}
 
 	m.fields, cmd = m.fields.Update(msg)
 

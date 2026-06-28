@@ -24,6 +24,7 @@ The normal workflow is:
 - `internal/input/tui/analysis.go` owns analysis modes, field filtering/focus, scalar analysis, summary stats, histograms, and frequency bars.
 - `internal/input/tui/value_list.go` owns the editable value list and selected-value detail panel.
 - `internal/input/tui/export.go` owns export prompt state and JSON/JSONL/YAML/CSV/TSV export.
+- `internal/input/tui/help.go` owns contextual help popup content and help overlay state helpers.
 - `internal/input/tui/styles.go` owns shared layout, header/footer/popup rendering, and style helpers.
 
 ## State Invariants
@@ -42,6 +43,7 @@ The normal workflow is:
 
 - Each view should render through `screenView(header, content, footer)`.
 - Headers and footers should use the shared helpers in `styles.go`.
+- Footers should stay short and show only the most relevant actions for the current context; secondary actions belong in `?` contextual help.
 - The content area should fill the terminal space between header and footer.
 - Popups render after the header and reduce available content height.
 - Keep all model methods on pointer receivers unless a nested Bubble Tea model has a reason to remain value-based.

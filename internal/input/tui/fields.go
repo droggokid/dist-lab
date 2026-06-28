@@ -77,6 +77,10 @@ func (m fieldsModel) SelectedPath() string {
 	return m.selected
 }
 
+func (m fieldsModel) Filtering() bool {
+	return m.list != nil && m.list.FilterState() == list.Filtering
+}
+
 func (m *Model) fieldsView() string {
 	return m.screenView(
 		m.fieldsHeader(),
@@ -90,17 +94,14 @@ func (m *Model) fieldsHeader() string {
 }
 
 func (m *Model) fieldsFooter() string {
-	// The list has its own help, we can render it here
-	baseActions := []keyHelp{
-		{key: "enter", label: "select"},
-		{key: "a", label: "add file"},
-		{key: "o", label: "new file"},
-		{key: "q", label: "quit"},
-	}
-	if m.fields.list == nil {
-		return helpFooter(baseActions...)
-	}
-	return m.fields.list.Help.View(*m.fields.list) + "\n" + helpFooter(baseActions...)
+	return helpFooter(
+		keyHelp{key: "up/down", label: "move"},
+		keyHelp{key: "/", label: "filter"},
+		keyHelp{key: "enter", label: "select"},
+		keyHelp{key: "esc", label: "back"},
+		keyHelp{key: "?", label: "help"},
+		keyHelp{key: "q", label: "quit"},
+	)
 }
 
 func (m *Model) resizeFields() {
