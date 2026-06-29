@@ -1,17 +1,12 @@
 # dist-lab
 
 dist-lab is a terminal UI for exploring structured data. It loads JSON, JSONL/NDJSON, YAML, CSV, and TSV files, discovers field paths, previews the values at a selected path, lets you adjust the current value set, and exports the result to JSON, JSONL, YAML, CSV, or TSV.
+## Install
 
-## Run
-
-```sh
-go run ./cmd
-```
-
-Build a local binary:
+Download the latest `.deb` from the releases page, then install it with:
 
 ```sh
-go build -o dist-lab ./cmd
+sudo apt install ./dist-lab_VERSION_ARCH.deb
 ```
 
 ## Workflow

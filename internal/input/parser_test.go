@@ -68,6 +68,64 @@ func TestAddFileHandlesRootArrays(t *testing.T) {
 	}
 }
 
+func TestHandleSelectionPreservesQuotedPathKeys(t *testing.T) {
+	path := writeJSONFile(t, "quoted-keys.json", `{
+		"a[]": "literal brackets",
+		"a.b": "literal dot",
+		"column with spaces": "literal spaces",
+		"quote\"key": "literal quote",
+		"items": [{"name": "Ada"}, {"name": "Lin"}]
+	}`)
+
+	parser := NewParser()
+	if err := parser.AddFile(path); err != nil {
+		t.Fatalf("AddFile() error = %v", err)
+	}
+
+	tests := []struct {
+		path string
+		want []any
+	}{
+		{path: `$["a[]"]`, want: []any{"literal brackets"}},
+		{path: `$["a.b"]`, want: []any{"literal dot"}},
+		{path: `$["column with spaces"]`, want: []any{"literal spaces"}},
+		{path: `$["quote\"key"]`, want: []any{"literal quote"}},
+		{path: "$.items[].name", want: []any{"Ada", "Lin"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got, err := parser.HandleSelection(tt.path, parser.Docs)
+			if err != nil {
+				t.Fatalf("HandleSelection(%s) error = %v", tt.path, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("HandleSelection(%s) = %#v, want %#v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenericPathToJQOnlyOptionalizesArrayWildcards(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: `$["a[]"]`, want: `.["a[]"]`},
+		{path: `$["a.b"]`, want: `.["a.b"]`},
+		{path: `$["column with spaces"]`, want: `.["column with spaces"]`},
+		{path: `$["quote\"key"]`, want: `.["quote\"key"]`},
+		{path: "$.items[].name", want: ".items[]?.name"},
+		{path: "$[].name", want: ".[]?.name"},
+	}
+
+	for _, tt := range tests {
+		if got := genericPathToJQ(tt.path); got != tt.want {
+			t.Fatalf("genericPathToJQ(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
 func TestAddFileHandlesJSONLines(t *testing.T) {
 	path := writeJSONFile(t, "data.jsonl", strings.Join([]string{
 		`{"name":"Ada","score":1}`,
@@ -269,6 +327,34 @@ func TestAddFileErrors(t *testing.T) {
 	}
 }
 
+func TestAddFileDoesNotKeepPartialDocsAfterFailure(t *testing.T) {
+	first := writeJSONFile(t, "first.json", `{"name":"Ada"}`)
+	invalid := writeJSONFile(t, "bad.json", "{\"bad\":true}\n{")
+	second := writeJSONFile(t, "second.json", `{"score":2}`)
+
+	parser := NewParser()
+	if err := parser.AddFile(first); err != nil {
+		t.Fatalf("AddFile(first) error = %v", err)
+	}
+
+	if err := parser.AddFile(invalid); err == nil {
+		t.Fatal("AddFile(invalid) error = nil, want error")
+	}
+	if got := len(parser.Docs); got != 1 {
+		t.Fatalf("len(Docs) after failed AddFile = %d, want 1", got)
+	}
+	assertFieldsDoNotContain(t, parser.Fields, "$.bad")
+
+	if err := parser.AddFile(second); err != nil {
+		t.Fatalf("AddFile(second) error = %v", err)
+	}
+	if got := len(parser.Docs); got != 2 {
+		t.Fatalf("len(Docs) after second AddFile = %d, want 2", got)
+	}
+	assertFieldsContain(t, parser.Fields, "$.name", "$.score")
+	assertFieldsDoNotContain(t, parser.Fields, "$.bad")
+}
+
 func TestDetectFileFormat(t *testing.T) {
 	tests := []struct {
 		path string
@@ -303,6 +389,21 @@ func assertFieldsContain(t *testing.T, fields []Field, paths ...string) {
 	for _, path := range paths {
 		if _, ok := got[path]; !ok {
 			t.Fatalf("field %q not found in %#v", path, fields)
+		}
+	}
+}
+
+func assertFieldsDoNotContain(t *testing.T, fields []Field, paths ...string) {
+	t.Helper()
+
+	got := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		got[field.Path] = struct{}{}
+	}
+
+	for _, path := range paths {
+		if _, ok := got[path]; ok {
+			t.Fatalf("field %q found in %#v", path, fields)
 		}
 	}
 }

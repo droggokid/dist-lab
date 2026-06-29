@@ -21,3 +21,10 @@ go.work
 # Build output
 dist/
 out/
+
+dist-lab
+*.deb
+*.pkg.tar.zst
+*.rpm
+*.apk
+checksums.txt

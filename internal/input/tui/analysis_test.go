@@ -88,6 +88,49 @@ func TestAnalyzeValuesCollectsRecursiveObjectFields(t *testing.T) {
 	}
 }
 
+func TestAnalyzeValuesCountsAbsentRecursiveFieldsAsEmpty(t *testing.T) {
+	stats := analyzeValues([]any{
+		map[string]any{"year": 2001},
+		map[string]any{},
+	})
+
+	year := stats.fields["year"]
+	if year == nil {
+		t.Fatal("year field was not analyzed")
+	}
+	if year.total != 2 {
+		t.Fatalf("year total = %d, want 2", year.total)
+	}
+	if year.empty != 1 {
+		t.Fatalf("year empty = %d, want 1", year.empty)
+	}
+	if !reflect.DeepEqual(year.numeric, []float64{2001}) {
+		t.Fatalf("year numeric = %#v, want [2001]", year.numeric)
+	}
+}
+
+func TestAnalyzeValuesCountsAbsentNestedRecursiveFieldsAsEmpty(t *testing.T) {
+	stats := analyzeValues([]any{
+		map[string]any{"profile": map[string]any{"age": 36}},
+		map[string]any{"profile": map[string]any{}},
+		map[string]any{},
+	})
+
+	age := stats.fields["profile.age"]
+	if age == nil {
+		t.Fatal("profile.age field was not analyzed")
+	}
+	if age.total != 3 {
+		t.Fatalf("profile.age total = %d, want 3", age.total)
+	}
+	if age.empty != 2 {
+		t.Fatalf("profile.age empty = %d, want 2", age.empty)
+	}
+	if !reflect.DeepEqual(age.numeric, []float64{36}) {
+		t.Fatalf("profile.age numeric = %#v, want [36]", age.numeric)
+	}
+}
+
 func TestSummarizeNumeric(t *testing.T) {
 	values := []float64{1, 2, 3, 4}
 	summary := summarizeNumeric(values)
