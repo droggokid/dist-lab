@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -184,6 +186,22 @@ func TestExportValuesJSONL(t *testing.T) {
 	}
 }
 
+func TestWriteValuesJSONLReturnsCloseError(t *testing.T) {
+	closeErr := errors.New("delayed close")
+	file := &closeErrorBuffer{err: closeErr}
+
+	err := writeValuesJSONLFile("values.jsonl", file, []any{"plain"})
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("writeValuesJSONLFile() error = %v, want %v", err, closeErr)
+	}
+	if !strings.Contains(err.Error(), "close jsonl export") {
+		t.Fatalf("writeValuesJSONLFile() error = %q, want close context", err)
+	}
+	if got, want := file.String(), "\"plain\"\n"; got != want {
+		t.Fatalf("JSONL writes before close = %q, want %q", got, want)
+	}
+}
+
 func TestExportValuesYAML(t *testing.T) {
 	m := NewModel()
 	m.values = []any{map[string]any{"name": "Ada", "active": true}}
@@ -304,6 +322,22 @@ func TestExportValuesCSVHandlesScalars(t *testing.T) {
 	}
 }
 
+func TestWriteValuesDelimitedReturnsCloseError(t *testing.T) {
+	closeErr := errors.New("delayed close")
+	file := &closeErrorBuffer{err: closeErr}
+
+	err := writeValuesDelimitedFile("values.csv", file, ',', "csv", []any{map[string]any{"name": "Ada"}})
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("writeValuesDelimitedFile() error = %v, want %v", err, closeErr)
+	}
+	if !strings.Contains(err.Error(), "close csv export") {
+		t.Fatalf("writeValuesDelimitedFile() error = %q, want close context", err)
+	}
+	if got, want := file.String(), "name\nAda\n"; got != want {
+		t.Fatalf("CSV writes before close = %q, want %q", got, want)
+	}
+}
+
 func TestCSVCellFormatsValues(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -350,4 +384,13 @@ func readDelimitedFile(t *testing.T, path string, comma rune) [][]string {
 	}
 
 	return records
+}
+
+type closeErrorBuffer struct {
+	bytes.Buffer
+	err error
+}
+
+func (b *closeErrorBuffer) Close() error {
+	return b.err
 }

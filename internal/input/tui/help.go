@@ -118,6 +118,9 @@ func (m *Model) helpSections() []helpSection {
 				title: "Inputs",
 				items: []keyHelp{
 					{key: "Rows", label: "100 or 50..250"},
+					{key: "Element", label: "list/matrix scalar type"},
+					{key: "Length", label: "list item count"},
+					{key: "Matrix", label: "row and column counts"},
 					{key: "Choices", label: "comma-separated strings"},
 					{key: "Weights", label: "optional comma-separated weights"},
 				},

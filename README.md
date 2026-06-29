@@ -1,17 +1,12 @@
 # dist-lab
 
 dist-lab is a terminal UI for exploring structured data. It loads JSON, JSONL/NDJSON, YAML, CSV, and TSV files, discovers field paths, previews the values at a selected path, lets you adjust the current value set, and exports the result to JSON, JSONL, YAML, CSV, or TSV.
+## Install
 
-## Run
-
-```sh
-go run ./cmd
-```
-
-Build a local binary:
+Download the latest `.deb` from the releases page, then install it with:
 
 ```sh
-go build -o dist-lab ./cmd
+sudo apt install ./dist-lab_VERSION_ARCH.deb
 ```
 
 ## Workflow
@@ -103,8 +98,10 @@ Templates:
 - Numeric: integer or decimal values with min/max bounds and uniform or bounded-normal distribution.
 - Boolean: true/false values controlled by a true probability from `0` to `1`.
 - Categorical: string choices from a comma-separated list, with optional comma-separated weights.
+- List: arrays of generated numeric, boolean, or categorical values.
+- Matrix: arrays of arrays of generated numeric, boolean, or categorical values.
 
-Rows can be a fixed count such as `100` or a random interval such as `50..250`.
+Rows can be a fixed count such as `100` or a random interval such as `50..250`. Generated composite datasets are capped at one million scalar cells to avoid accidentally creating huge files.
 
 ## Exports
 

@@ -20,7 +20,8 @@ The normal workflow is:
 - `internal/input/tui/model.go` owns the top-level TUI state machine.
 - `internal/input/tui/startup.go` renders the startup open/create choice.
 - `internal/input/tui/file_picker.go` renders and sizes the file picker state.
-- `internal/input/tui/create_dataset.go` owns generated dataset form state, validation, generation, and generated-file loading.
+- `internal/input/tui/create_dataset.go` owns generated dataset form state and generated-file loading.
+- `internal/input/tui/create_dataset_generator.go` owns generated dataset validation and numeric/boolean/categorical/list/matrix generation.
 - `internal/input/tui/fields.go` renders and sizes the field selection state.
 - `internal/input/tui/preview.go` owns preview modes, value filtering, value formatting, and value mutation.
 - `internal/input/tui/analysis.go` owns analysis modes, field filtering/focus, scalar analysis, summary stats, histograms, and frequency bars.
@@ -58,7 +59,7 @@ High-value coverage:
 
 - Parser file loading, error cases, path discovery, and field selection.
 - JSON, JSONL/NDJSON, YAML, CSV, and TSV input behavior.
-- Generated dataset validation, numeric/boolean/categorical generation, row-count intervals, and loading generated files through the parser.
+- Generated dataset validation, numeric/boolean/categorical/list/matrix generation, row-count intervals, composite-size caps, and loading generated files through the parser.
 - Recursive nil/empty filtering and clone behavior.
 - Value deletion/restoration and export state.
 - Analysis over current values: numeric stats, quartiles/IQR/outliers, categorical frequencies/cardinality, percentages, missing-data rankings, date-like objects, boolean counts, recursive object/array field paths, and unsupported values.

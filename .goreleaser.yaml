@@ -1,0 +1,50 @@
+version: 2
+
+project_name: dist-lab
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dist-lab
+    main: ./cmd
+    binary: dist-lab
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X dist-lab/internal/version.Version={{.Version}}
+      - -X dist-lab/internal/version.Commit={{.Commit}}
+      - -X dist-lab/internal/version.Date={{.Date}}
+
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+nfpms:
+  - id: dist-lab
+    package_name: dist-lab
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
+    homepage: https://github.com/droggokid/dist-lab
+    maintainer: Radu Munteanu <raduflorinmunteanu@gmail.com>
+    description: Terminal UI for exploring structured data, extracting value sets, analyzing distributions, and exporting datasets.
+    license: MIT
+    section: utils
+    priority: optional
+    formats:
+      - deb
+      - archlinux
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"

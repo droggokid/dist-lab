@@ -2,38 +2,10 @@ package tui
 
 import (
 	"fmt"
-	"math"
-	"math/rand"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-)
-
-const maxGeneratedRows = 100000
-
-type generatedTemplate int
-
-const (
-	generatedTemplateNumeric generatedTemplate = iota
-	generatedTemplateBoolean
-	generatedTemplateCategorical
-)
-
-type generatedNumberKind int
-
-const (
-	generatedNumberInteger generatedNumberKind = iota
-	generatedNumberDecimal
-)
-
-type generatedNumericDistribution int
-
-const (
-	generatedNumericUniform generatedNumericDistribution = iota
-	generatedNumericNormal
 )
 
 type createDatasetRow int
@@ -42,6 +14,10 @@ const (
 	createRowTemplate createDatasetRow = iota
 	createRowFieldName
 	createRowRows
+	createRowElementKind
+	createRowListLength
+	createRowMatrixRows
+	createRowMatrixColumns
 	createRowNumberKind
 	createRowMin
 	createRowMax
@@ -57,12 +33,16 @@ type createDatasetModel struct {
 	selected createDatasetRow
 
 	template     generatedTemplate
+	elementKind  generatedValueKind
 	numberKind   generatedNumberKind
 	distribution generatedNumericDistribution
 	format       exportFormat
 
 	fieldName       textinput.Model
 	rows            textinput.Model
+	listLength      textinput.Model
+	matrixRows      textinput.Model
+	matrixColumns   textinput.Model
 	min             textinput.Model
 	max             textinput.Model
 	trueProbability textinput.Model
@@ -73,12 +53,16 @@ type createDatasetModel struct {
 
 type datasetGenerationConfig struct {
 	template     generatedTemplate
+	elementKind  generatedValueKind
 	numberKind   generatedNumberKind
 	distribution generatedNumericDistribution
 	format       exportFormat
 
 	fieldName       string
 	rows            string
+	listLength      string
+	matrixRows      string
+	matrixColumns   string
 	min             string
 	max             string
 	trueProbability string
@@ -91,12 +75,16 @@ func newCreateDatasetModel() createDatasetModel {
 	model := createDatasetModel{
 		selected:     createRowTemplate,
 		template:     generatedTemplateNumeric,
+		elementKind:  generatedValueNumeric,
 		numberKind:   generatedNumberInteger,
 		distribution: generatedNumericUniform,
 		format:       exportFormatJSON,
 
 		fieldName:       newCreateDatasetInput("value"),
 		rows:            newCreateDatasetInput("100"),
+		listLength:      newCreateDatasetInput("10"),
+		matrixRows:      newCreateDatasetInput("3"),
+		matrixColumns:   newCreateDatasetInput("3"),
 		min:             newCreateDatasetInput("0"),
 		max:             newCreateDatasetInput("100"),
 		trueProbability: newCreateDatasetInput("0.5"),
@@ -209,7 +197,7 @@ func (m *Model) createDatasetHeader() string {
 func (m *Model) createDatasetContent() string {
 	rows := m.create.visibleRows()
 	lines := make([]string, 0, len(rows)+2)
-	lines = append(lines, helpStyle.Render("Use 100 for a fixed row count or 50..250 for a random interval."), "")
+	lines = append(lines, helpStyle.Render("Rows can be fixed like 100 or random like 50..250. Lists and matrices wrap scalar generators."), "")
 
 	for _, row := range rows {
 		marker := " "
@@ -247,11 +235,15 @@ func (m *Model) resizeCreateDataset() {
 func (m createDatasetModel) config() datasetGenerationConfig {
 	return datasetGenerationConfig{
 		template:        m.template,
+		elementKind:     m.elementKind,
 		numberKind:      m.numberKind,
 		distribution:    m.distribution,
 		format:          m.format,
 		fieldName:       m.fieldName.Value(),
 		rows:            m.rows.Value(),
+		listLength:      m.listLength.Value(),
+		matrixRows:      m.matrixRows.Value(),
+		matrixColumns:   m.matrixColumns.Value(),
 		min:             m.min.Value(),
 		max:             m.max.Value(),
 		trueProbability: m.trueProbability.Value(),
@@ -286,6 +278,9 @@ func (m *createDatasetModel) cycleSelection(delta int) bool {
 	switch m.selected {
 	case createRowTemplate:
 		m.template = nextGeneratedTemplate(m.template, delta)
+		return true
+	case createRowElementKind:
+		m.elementKind = nextGeneratedValueKind(m.elementKind, delta)
 		return true
 	case createRowNumberKind:
 		m.numberKind = nextGeneratedNumberKind(m.numberKind, delta)
@@ -335,20 +330,33 @@ func (m *createDatasetModel) visibleRows() []createDatasetRow {
 	}
 
 	switch m.template {
-	case generatedTemplateNumeric:
-		rows = append(rows,
+	case generatedTemplateList:
+		rows = append(rows, createRowElementKind, createRowListLength)
+		rows = append(rows, scalarRows(m.elementKind)...)
+	case generatedTemplateMatrix:
+		rows = append(rows, createRowElementKind, createRowMatrixRows, createRowMatrixColumns)
+		rows = append(rows, scalarRows(m.elementKind)...)
+	default:
+		rows = append(rows, scalarRows(m.template.ValueKind())...)
+	}
+
+	return append(rows, createRowFormat, createRowPath)
+}
+
+func scalarRows(kind generatedValueKind) []createDatasetRow {
+	switch kind {
+	case generatedValueBoolean:
+		return []createDatasetRow{createRowTrueProbability}
+	case generatedValueCategorical:
+		return []createDatasetRow{createRowChoices, createRowWeights}
+	default:
+		return []createDatasetRow{
 			createRowNumberKind,
 			createRowMin,
 			createRowMax,
 			createRowDistribution,
-		)
-	case generatedTemplateBoolean:
-		rows = append(rows, createRowTrueProbability)
-	case generatedTemplateCategorical:
-		rows = append(rows, createRowChoices, createRowWeights)
+		}
 	}
-
-	return append(rows, createRowFormat, createRowPath)
 }
 
 func (m *createDatasetModel) selectedIndex(rows []createDatasetRow) int {
@@ -372,6 +380,12 @@ func (m *createDatasetModel) input(row createDatasetRow) *textinput.Model {
 		return &m.fieldName
 	case createRowRows:
 		return &m.rows
+	case createRowListLength:
+		return &m.listLength
+	case createRowMatrixRows:
+		return &m.matrixRows
+	case createRowMatrixColumns:
+		return &m.matrixColumns
 	case createRowMin:
 		return &m.min
 	case createRowMax:
@@ -393,6 +407,9 @@ func (m *createDatasetModel) inputs() []*textinput.Model {
 	return []*textinput.Model{
 		&m.fieldName,
 		&m.rows,
+		&m.listLength,
+		&m.matrixRows,
+		&m.matrixColumns,
 		&m.min,
 		&m.max,
 		&m.trueProbability,
@@ -410,6 +427,8 @@ func (m *createDatasetModel) rowValue(row createDatasetRow) string {
 	switch row {
 	case createRowTemplate:
 		return valueStyle.Render(m.template.Label())
+	case createRowElementKind:
+		return valueStyle.Render(m.elementKind.Label())
 	case createRowNumberKind:
 		return valueStyle.Render(m.numberKind.Label())
 	case createRowDistribution:
@@ -429,6 +448,14 @@ func (r createDatasetRow) Label() string {
 		return "Field"
 	case createRowRows:
 		return "Rows"
+	case createRowElementKind:
+		return "Element"
+	case createRowListLength:
+		return "List length"
+	case createRowMatrixRows:
+		return "Matrix rows"
+	case createRowMatrixColumns:
+		return "Matrix columns"
 	case createRowNumberKind:
 		return "Number kind"
 	case createRowMin:
@@ -450,356 +477,4 @@ func (r createDatasetRow) Label() string {
 	default:
 		return ""
 	}
-}
-
-func (t generatedTemplate) Label() string {
-	switch t {
-	case generatedTemplateBoolean:
-		return "boolean"
-	case generatedTemplateCategorical:
-		return "categorical"
-	default:
-		return "numeric"
-	}
-}
-
-func (k generatedNumberKind) Label() string {
-	switch k {
-	case generatedNumberDecimal:
-		return "decimal"
-	default:
-		return "integer"
-	}
-}
-
-func (d generatedNumericDistribution) Label() string {
-	switch d {
-	case generatedNumericNormal:
-		return "normal"
-	default:
-		return "uniform"
-	}
-}
-
-func nextGeneratedTemplate(value generatedTemplate, delta int) generatedTemplate {
-	values := []generatedTemplate{
-		generatedTemplateNumeric,
-		generatedTemplateBoolean,
-		generatedTemplateCategorical,
-	}
-
-	return values[wrappedIndex(int(value), delta, len(values))]
-}
-
-func nextGeneratedNumberKind(value generatedNumberKind, delta int) generatedNumberKind {
-	values := []generatedNumberKind{
-		generatedNumberInteger,
-		generatedNumberDecimal,
-	}
-
-	return values[wrappedIndex(int(value), delta, len(values))]
-}
-
-func nextGeneratedNumericDistribution(value generatedNumericDistribution, delta int) generatedNumericDistribution {
-	values := []generatedNumericDistribution{
-		generatedNumericUniform,
-		generatedNumericNormal,
-	}
-
-	return values[wrappedIndex(int(value), delta, len(values))]
-}
-
-func adjacentExportFormat(value exportFormat, delta int) exportFormat {
-	for i, format := range exportFormats {
-		if format == value {
-			return exportFormats[wrappedIndex(i, delta, len(exportFormats))]
-		}
-	}
-
-	return exportFormats[0]
-}
-
-func wrappedIndex(index int, delta int, count int) int {
-	index += delta
-	for index < 0 {
-		index += count
-	}
-
-	return index % count
-}
-
-func defaultGeneratedPath(fieldName string, format exportFormat) string {
-	name := sanitizeExportName(fieldName)
-	if name == "" {
-		name = "value"
-	}
-
-	return fmt.Sprintf("generated-%s.%s", name, exportFormatExtension(format))
-}
-
-func generateDataset(config datasetGenerationConfig, rng *rand.Rand) ([]any, error) {
-	if rng == nil {
-		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	}
-
-	fieldName := strings.TrimSpace(config.fieldName)
-	if fieldName == "" {
-		return nil, fmt.Errorf("field name is required")
-	}
-
-	count, err := parseGeneratedRowCount(config.rows, rng)
-	if err != nil {
-		return nil, err
-	}
-
-	generator, err := valueGenerator(config, rng)
-	if err != nil {
-		return nil, err
-	}
-
-	values := make([]any, count)
-	for i := range values {
-		values[i] = map[string]any{
-			fieldName: generator(),
-		}
-	}
-
-	return values, nil
-}
-
-func valueGenerator(config datasetGenerationConfig, rng *rand.Rand) (func() any, error) {
-	switch config.template {
-	case generatedTemplateNumeric:
-		return numericValueGenerator(config, rng)
-	case generatedTemplateBoolean:
-		return booleanValueGenerator(config, rng)
-	case generatedTemplateCategorical:
-		return categoricalValueGenerator(config, rng)
-	default:
-		return nil, fmt.Errorf("unsupported generated template")
-	}
-}
-
-func numericValueGenerator(config datasetGenerationConfig, rng *rand.Rand) (func() any, error) {
-	minValue, err := strconv.ParseFloat(strings.TrimSpace(config.min), 64)
-	if err != nil {
-		return nil, fmt.Errorf("numeric min must be a number")
-	}
-
-	maxValue, err := strconv.ParseFloat(strings.TrimSpace(config.max), 64)
-	if err != nil {
-		return nil, fmt.Errorf("numeric max must be a number")
-	}
-
-	if minValue > maxValue {
-		return nil, fmt.Errorf("numeric min cannot be greater than max")
-	}
-
-	if config.numberKind == generatedNumberInteger {
-		minInt := int64(math.Ceil(minValue))
-		maxInt := int64(math.Floor(maxValue))
-		if minInt > maxInt {
-			return nil, fmt.Errorf("numeric range contains no integer values")
-		}
-
-		return func() any {
-			var value int64
-			if config.distribution == generatedNumericNormal {
-				value = int64(math.Round(boundedNormal(rng, float64(minInt), float64(maxInt))))
-				if value < minInt {
-					value = minInt
-				}
-				if value > maxInt {
-					value = maxInt
-				}
-			} else if minInt == maxInt {
-				value = minInt
-			} else {
-				value = minInt + rng.Int63n(maxInt-minInt+1)
-			}
-
-			return int(value)
-		}, nil
-	}
-
-	return func() any {
-		if config.distribution == generatedNumericNormal {
-			return boundedNormal(rng, minValue, maxValue)
-		}
-		if minValue == maxValue {
-			return minValue
-		}
-
-		return minValue + rng.Float64()*(maxValue-minValue)
-	}, nil
-}
-
-func boundedNormal(rng *rand.Rand, minValue float64, maxValue float64) float64 {
-	if minValue == maxValue {
-		return minValue
-	}
-
-	mean := (minValue + maxValue) / 2
-	stddev := (maxValue - minValue) / 6
-	for i := 0; i < 64; i++ {
-		value := rng.NormFloat64()*stddev + mean
-		if value >= minValue && value <= maxValue {
-			return value
-		}
-	}
-
-	value := rng.NormFloat64()*stddev + mean
-	if value < minValue {
-		return minValue
-	}
-	if value > maxValue {
-		return maxValue
-	}
-
-	return value
-}
-
-func booleanValueGenerator(config datasetGenerationConfig, rng *rand.Rand) (func() any, error) {
-	probability, err := strconv.ParseFloat(strings.TrimSpace(config.trueProbability), 64)
-	if err != nil {
-		return nil, fmt.Errorf("true chance must be a number from 0 to 1")
-	}
-
-	if probability < 0 || probability > 1 {
-		return nil, fmt.Errorf("true chance must be between 0 and 1")
-	}
-
-	return func() any {
-		return rng.Float64() < probability
-	}, nil
-}
-
-func categoricalValueGenerator(config datasetGenerationConfig, rng *rand.Rand) (func() any, error) {
-	choices := parseGeneratedChoices(config.choices)
-	if len(choices) == 0 {
-		return nil, fmt.Errorf("at least one categorical choice is required")
-	}
-
-	weights, err := parseGeneratedWeights(config.weights, len(choices))
-	if err != nil {
-		return nil, err
-	}
-
-	if len(weights) == 0 {
-		return func() any {
-			return choices[rng.Intn(len(choices))]
-		}, nil
-	}
-
-	totalWeight := 0.0
-	for _, weight := range weights {
-		totalWeight += weight
-	}
-
-	return func() any {
-		target := rng.Float64() * totalWeight
-		seen := 0.0
-		for i, weight := range weights {
-			seen += weight
-			if target <= seen {
-				return choices[i]
-			}
-		}
-
-		return choices[len(choices)-1]
-	}, nil
-}
-
-func parseGeneratedChoices(value string) []string {
-	parts := strings.Split(value, ",")
-	choices := make([]string, 0, len(parts))
-	for _, part := range parts {
-		choice := strings.TrimSpace(part)
-		if choice != "" {
-			choices = append(choices, choice)
-		}
-	}
-
-	return choices
-}
-
-func parseGeneratedWeights(value string, choiceCount int) ([]float64, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, nil
-	}
-
-	parts := strings.Split(value, ",")
-	if len(parts) != choiceCount {
-		return nil, fmt.Errorf("weights must match the number of choices")
-	}
-
-	weights := make([]float64, len(parts))
-	total := 0.0
-	for i, part := range parts {
-		weight, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
-		if err != nil {
-			return nil, fmt.Errorf("weights must be numbers")
-		}
-		if weight < 0 {
-			return nil, fmt.Errorf("weights cannot be negative")
-		}
-
-		weights[i] = weight
-		total += weight
-	}
-
-	if total == 0 {
-		return nil, fmt.Errorf("at least one weight must be greater than zero")
-	}
-
-	return weights, nil
-}
-
-func parseGeneratedRowCount(value string, rng *rand.Rand) (int, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, fmt.Errorf("row count is required")
-	}
-
-	if strings.Contains(value, "..") {
-		parts := strings.Split(value, "..")
-		if len(parts) != 2 {
-			return 0, fmt.Errorf("row interval must look like 50..250")
-		}
-
-		minCount, err := parseGeneratedRowCountInt(parts[0])
-		if err != nil {
-			return 0, err
-		}
-
-		maxCount, err := parseGeneratedRowCountInt(parts[1])
-		if err != nil {
-			return 0, err
-		}
-
-		if minCount > maxCount {
-			return 0, fmt.Errorf("row interval min cannot be greater than max")
-		}
-
-		return minCount + rng.Intn(maxCount-minCount+1), nil
-	}
-
-	return parseGeneratedRowCountInt(value)
-}
-
-func parseGeneratedRowCountInt(value string) (int, error) {
-	count, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return 0, fmt.Errorf("row count must be a whole number or interval")
-	}
-
-	if count < 1 {
-		return 0, fmt.Errorf("row count must be at least 1")
-	}
-	if count > maxGeneratedRows {
-		return 0, fmt.Errorf("row count cannot exceed %d", maxGeneratedRows)
-	}
-
-	return count, nil
 }
